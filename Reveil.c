@@ -4,7 +4,8 @@
 #include "reveil.h"
 #include "hd77480.h"
 
-Menu menuPrincipal, menuEclairage;
+Menu mPrincipal, mEclairage;
+Menu* menu;
 
 int annee, mois, jour, jourSem;
 int delaiSoleil; //temps de lever du soleil en minutes
@@ -25,114 +26,6 @@ NAKED(_reset_vector__)
 	/* Make sure, the branch to main (or to your start
 	   routine) is the last line in the function */
 	__asm__ __volatile__("br #main"::);
-}
-
-
-static void __inline__ Delay(register unsigned int n)
-{
-    __asm__ __volatile__ (
-		"1: \n"
-		" dec	%[n] \n nop \n nop \n nop \n"
-		" jne	1b \n"
-        : [n] "+r"(n));
-}
-
-void LCDPulseEnable(){
-  LCD_PORT &= ~E;
-  LCD_PORT |= E;
-  //Delay(1);
-  LCD_PORT &= ~E;
-}
-
-void LCDWrite4Bits(unsigned char value)
-{
-  if(value & 0x01) LCD_PORT |= D4; else LCD_PORT&=~D4;
-  if(value & 0x02) LCD_PORT |= D5; else LCD_PORT&=~D5; 
-  if(value & 0x04) LCD_PORT |= D6; else LCD_PORT&=~D6; 
-  if(value & 0x08) LCD_PORT |= D7; else LCD_PORT&=~D7; 
-  
-  LCDPulseEnable();
-  Delay(200);
-}
-
-
-void LCDSend(unsigned char value, unsigned char mode) {
-    P1OUT |= BIT6;
-    if (mode==SEND_CHR) LCD_PORT |= RS; else LCD_PORT &= ~RS;
-    LCDWrite4Bits(value>>4);
-    LCDWrite4Bits(value);
-    P1OUT &= ~BIT6;
-}
-
-void LCDSendCustomChar()
-{
-  LCDSend(LCD_SETCGRAMADDR,SEND_CMD);
-  
-  int i;
-  for(i=0;i<8*7;i++)
-    LCDSend(customChars[i],SEND_CHR);
-
-  LCDSend(LCD_RETURNHOME,SEND_CMD);
-}
-
-//Efface la totalité de l'écran
-void LCDClear(void) {
-   LCDSend(LCD_CLEARDISPLAY,SEND_CMD);
-   Delay(100);
-}
-
-// Va a une position prédéfinie
-void LCDGotoXY(unsigned char x, unsigned char y)
-{
-  unsigned char delta;
-  switch(y){
-    case 0:
-      delta = 0x00;
-      break;
-    case 1:
-      delta = 0x40;
-      break;
-    case 2:
-      delta = 20;
-      break;
-    case 3:
-      delta = 0x40+20;
-      break;
-    default:
-      delta=0;
-  }
-  delta = delta+x;
-  LCDSend(LCD_SETDDRAMADDR|delta,SEND_CMD);
-}
-
-
-void LCDSendBigNum3(int num,int x)
-{
-  int row, col, i;
-  i=0;
-  for(row=0;row<3; row++)
-  {
-    LCDGotoXY(x,row);
-    for(col=0;col<4;col++)
-    {
-      LCDSend(bignums3[(num*12)+i],SEND_CHR);
-      i++;    
-    } 
-  }
-}
-
-void LCDWriteInt2(int num)
-{
-    LCDSend('0'+num/10,SEND_CHR);
-    LCDSend('0'+num%10,SEND_CHR);
-}
-
-void LCDWriteInt4(int num)
-{
-  LCDSend('0'+num/1000,SEND_CHR);
-  LCDSend('0'+(num/100)%10,SEND_CHR);
-  LCDSend('0'+(num/10)%10,SEND_CHR);
-  LCDSend('0'+num%10,SEND_CHR);
 }
 
 void LCDWriteHeure(Heure heure)
@@ -289,56 +182,32 @@ void affichageMenu()
   if(aMAJ & MAJ_CLEAR)
     LCDClear(); 
   
-  if(aMAJ & MAJ_REGL_MENU)
+  if(aMAJ & MAJ_MENU)
   {
     LCDClear();
-    aMAJ |= MAJ_REGL_HEURE | MAJ_REGL_ALARME | MAJ_REGL_SOLEIL | MAJ_FLECHE;
-    LCDGotoXY(6,0);
-    LCDWriteString(strReglage);
+    switch(menu->ecran){
+      case ECRAN_MENU_PRINCIPAL:
+        aMAJ |= MAJ_REGL_HEURE | MAJ_REGL_ALARME | MAJ_REGL_SOLEIL | MAJ_FLECHE ;
+        break;
+      case ECRAN_MENU_ECLAIRAGE:
+        aMAJ |= MAJ_ECR_MIN | MAJ_ECR_MAX | MAJ_FLECHE;
+        break;
+        }
+    LCDGotoXY(MENU_X,0);
+    LCDWriteString(menu->titre);
     
     // Affiche les textes des menus
     int iMenu;
     for(iMenu=0;iMenu<3;iMenu++)
     {
       LCDGotoXY(1,1);
-      LCDWriteString(strMenus[shiftMenu]);
+      LCDWriteString(menu->strOptions[shiftMenu]);
       
       LCDGotoXY(1,2);
-      LCDWriteString(strMenus[(shiftMenu+1)%NB_MENU]);
+      LCDWriteString(menu->strOptions[(shiftMenu+1)%menu->nbOptions]);
       
       LCDGotoXY(1,3);
-      LCDWriteString(strMenus[(shiftMenu+2)%NB_MENU]);
-    }
-  }
-    
-  if(aMAJ & MAJ_REGL_HEURE)
-  { 
-    int y=(NB_MENU+MENU_HEURE-shiftMenu+1)%NB_MENU;
-    if((y>0) & (y<4))
-    {
-      LCDGotoXY(11,y);
-      LCDWriteHeure(heure);
-    }
-  }
-  
-  if(aMAJ & MAJ_REGL_ALARME)
-  {  
-    int y=(NB_MENU+MENU_ALARME-shiftMenu+1)%NB_MENU;
-    if((y>0) & (y<4))
-    {
-      LCDGotoXY(11,y);
-      LCDWriteHeure(alarme);
-    }
-  }
-  
-  if(aMAJ & MAJ_REGL_SOLEIL)
-  { 
-    int y=(NB_MENU+MENU_SOLEIL-shiftMenu+1)%NB_MENU;
-     if((y>0) & (y<4))
-    {
-      LCDGotoXY(11,y);
-      LCDWriteInt2(delaiSoleil);
-      LCDWriteString(" min");
+      LCDWriteString(menu->strOptions[(shiftMenu+2)%menu->nbOptions]);
     }
   }
   
@@ -348,6 +217,65 @@ void affichageMenu()
     LCDSend(' ',SEND_CHR);
     LCDGotoXY(0,select);
     LCDSend(0x7E,SEND_CHR);
+  }
+  
+  if(menu->ecran == ECRAN_MENU_PRINCIPAL)
+  {
+    if(aMAJ & MAJ_REGL_HEURE)
+    { 
+      int y=(menu->nbOptions+MENU_HEURE-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteHeure(heure);
+      }
+    }
+    
+    if(aMAJ & MAJ_REGL_ALARME)
+    {  
+      int y=(menu->nbOptions+MENU_ALARME-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteHeure(alarme);
+      }
+    }
+    
+    if(aMAJ & MAJ_REGL_SOLEIL)
+    { 
+      int y=(menu->nbOptions+MENU_SOLEIL-shiftMenu+1)%menu->nbOptions;
+       if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteInt2(delaiSoleil);
+        LCDWriteString(" min");
+      }
+    }
+  }
+  
+  if(menu->ecran == ECRAN_MENU_ECLAIRAGE)
+  {
+    if(aMAJ & MAJ_ECR_MIN)
+    { 
+      int y=(menu->nbOptions+MENU_ECRAN_MIN-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteInt3(blMin);
+        LCDWriteString(" %");
+      }
+    }
+    
+    if(aMAJ & MAJ_ECR_MAX)
+    { 
+      int y=(menu->nbOptions+MENU_ECRAN_MAX-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X,y);
+        LCDWriteInt3(blMax);
+        LCDWriteString(" %");
+      }
+    }
   }
   
   if(aMAJ & MAJ_CURS)
@@ -361,18 +289,47 @@ void affichageMenu()
   aMAJ = MAJ_RIEN;
 }
 
-
-void affichageMenuEclairage()
-{
-  
-}
-
-
-void reglageHeure(Heure* h,int type)
+void reglageInt(int* num, int min, int max,enum Maj type)
 {
     aMAJ |= MAJ_CURS;
     cursOn=1;
-    cursX = 12;
+    cursX = PARAMS_X;
+    cursY = select;
+    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX))
+      setBL(*num);
+    while(btnAppuye != MENU)
+    {
+      if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX))
+        setBL(*num);
+      if(aMAJ)
+        affichageMenu();
+      switch(btnAppuye){
+        case HAUT :
+          btnAppuye = AUCUN;
+          if(*num<max)
+            *num += 1;
+          aMAJ |= type;
+          break;
+        case BAS :
+          btnAppuye = AUCUN;
+          if(*num>min)
+          *num -= 1;
+          aMAJ |= type;
+          break;
+      }
+    }
+    btnAppuye = AUCUN;
+    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX))
+      setBL(blFadeValue);
+    aMAJ |= MAJ_CURS;
+    cursOn=0;
+}
+
+void reglageHeure(Heure* h,enum Maj type)
+{
+    aMAJ |= MAJ_CURS;
+    cursOn=1;
+    cursX = PARAMS_X+1;
     cursY = select;
     while(btnAppuye != MENU)
     {
@@ -393,7 +350,7 @@ void reglageHeure(Heure* h,int type)
     }
     aMAJ |= MAJ_CURS;
     btnAppuye = AUCUN;
-    cursX = 14;
+    cursX = PARAMS_X+3;
     while(btnAppuye != MENU)
     {
     if(aMAJ)
@@ -411,7 +368,7 @@ void reglageHeure(Heure* h,int type)
         break;
       }
     }
-    cursX = 15;
+    cursX = PARAMS_X+4;
     btnAppuye = AUCUN;
     aMAJ |= MAJ_CURS;
     while(btnAppuye != MENU)
@@ -436,20 +393,19 @@ void reglageHeure(Heure* h,int type)
     cursOn=0;
 }
 
-
-
-// Menu Principal
-void menu()
+void setMenu(Menu* m)
 {
-  strMenus = optsMainMenu;
-  select=1;
-  oldSelect=1;
+  menu = m;
   shiftMenu = 0;
-  maj=0;
-  aMAJ |= MAJ_REGL_MENU;
-  while(1)
-  {
-    if(aMAJ)
+  select =1;
+  oldSelect = 1;
+  ecran = menu->ecran;
+}
+
+//gere les fleches haut-bas dans un menu
+void gereMenu()
+{
+  if(aMAJ)
       affichageMenu();
     if(btnAppuye == HAUT)
     {
@@ -462,8 +418,8 @@ void menu()
       }
       else
       {
-        shiftMenu = (shiftMenu + NB_MENU -1)%NB_MENU;
-        aMAJ|=MAJ_REGL_MENU;
+        shiftMenu = (shiftMenu + menu->nbOptions -1)%menu->nbOptions;
+        aMAJ|=MAJ_MENU;
       }
     }
     if(btnAppuye == BAS)
@@ -477,14 +433,54 @@ void menu()
       }
       else
       {
-        shiftMenu = (shiftMenu+1)%NB_MENU;
-        aMAJ|=MAJ_REGL_MENU;
+        shiftMenu = (shiftMenu+1)%menu->nbOptions;
+        aMAJ|=MAJ_MENU;
       }
     }
+}
+
+void menuEclairage()
+{
+  setMenu(&mEclairage);
+  aMAJ |= MAJ_MENU;
+  while(1)
+  {
+    gereMenu(); //gere les fleches haut-bas
     if(btnAppuye == MENU)
     {
       btnAppuye = AUCUN;
-      int selectionne = (shiftMenu+select-1)%NB_MENU;
+      btnAppuye = AUCUN;
+      int selectionne = (shiftMenu+select-1)%menu->nbOptions;
+      switch(selectionne)
+      {
+        case MENU_SORTIE:
+          return;
+          break;
+        
+        case MENU_ECRAN_MIN:
+          reglageInt(&blMin,0,100,MAJ_ECR_MIN);
+          break;
+        
+        case MENU_ECRAN_MAX:
+          reglageInt(&blMax,0,100,MAJ_ECR_MAX);
+          break;
+      }
+    }
+  }
+}
+
+// Menu Principal
+void menuPrincipal()
+{
+  setMenu(&mPrincipal);
+  aMAJ |= MAJ_MENU;
+  while(1)
+  {
+    gereMenu(); //gere les fleches haut-bas
+    if(btnAppuye == MENU)
+    {
+      btnAppuye = AUCUN;
+      int selectionne = (shiftMenu+select-1)%menu->nbOptions;
       switch(selectionne)
       {
         case MENU_SORTIE:
@@ -496,9 +492,13 @@ void menu()
         case MENU_HEURE:
           reglageHeure(&heure,MAJ_REGL_HEURE); 
           break;
+        case MENU_SOLEIL:
+          reglageInt(&delaiSoleil,0,99,MAJ_REGL_SOLEIL);
+          break;
         case MENU_ECLAIRAGE:
-          //menuEclairage();
-          aMAJ |= MAJ_REGL_MENU;
+          menuEclairage();  
+          setMenu(&mPrincipal);
+          aMAJ |= MAJ_MENU;
           break;
         default:
           break;
@@ -512,6 +512,7 @@ void menu()
 // Boucle principale du mode d'affichage de l'heure
 void Loop()
 {
+  ecran = ECRAN_HEURE;
   // Si on doit mettre à jour quelque-chose, on Affiche
   if(aMAJ)
     affichageHeure();
@@ -520,8 +521,8 @@ void Loop()
   {
   case MENU:
     btnAppuye = AUCUN;
-    menu();
-    maj=1;
+    menuPrincipal();
+    ecran = ECRAN_HEURE;
     aMAJ = MAJ_CLEAR | MAJ_HEURE3 | MAJ_DATE | MAJ_DCF | MAJ_SOLEIL | MAJ_ALARME;
     break;
   
@@ -606,6 +607,16 @@ void main (void)
   heure.minutes = 58;
   delaiSoleil = 40;
   
+  //definition des menus
+  mPrincipal.titre = strReglage;
+  mPrincipal.nbOptions = 5;
+  mPrincipal.strOptions = optsMenuPrincipal;
+  mPrincipal.ecran = ECRAN_MENU_PRINCIPAL;
+  
+  mEclairage.titre = strEclairage+1;    //+1 pour supprimer l'espace du début
+  mEclairage.nbOptions = 5;
+  mEclairage.strOptions = optsMenuEclairage;
+  mEclairage.ecran = ECRAN_MENU_ECLAIRAGE;
   
   aMAJ = MAJ_HEURE3 | MAJ_DATE | MAJ_DCF | MAJ_SOLEIL | MAJ_ALARME;
   while(1)
@@ -738,11 +749,11 @@ interrupt (WDT_VECTOR) Watchdog(void)
             annee++;
           }
         }
-        if(maj)
+        if(ecran == ECRAN_HEURE)
           aMAJ |= MAJ_DATE;
        }
       }
-      if(maj)
+      if(ecran == ECRAN_HEURE)
         aMAJ|= MAJ_HEURE3;
     }
   }

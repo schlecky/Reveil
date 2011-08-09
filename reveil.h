@@ -27,12 +27,15 @@
 #define BL_FADE_MAX   100
 #define BL_FADE_STEP  5
 
+#define PARAMS_X  11
+#define MENU_X  6
+
 unsigned char nomJours[] = "LunMarMerJeuVenSamDim";
 
 unsigned char customChars[] = { 31, 31, 31, 31, 0, 0, 0, 0,       // caractere0 : demi-rectangle haut
                                 0, 0, 0, 0, 31, 31, 31, 31,       // caractere1 : demi-rectangle bas
                                 0, 14, 21, 23, 17, 14, 0, 0,      // caractere2 : horloge
-                                0, 4, 14, 14, 4, 0, 0, 0,         // caractere3 : point haut
+                                4, 14, 14, 4, 0, 0, 0, 0,         // caractere3 : point haut
                                 4, 14, 14, 14, 31, 0, 4, 0,       // caractere4 : cloche
                                 0, 14, 17, 14, 10, 0, 4, 0,       // caractere5 : DCF
                                 4, 21, 14, 27, 14, 21, 4, 0,      // caractere6 : Soleil                            
@@ -61,16 +64,36 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define strSoleil     "\6Soleil"
 #define strEclairage  " Eclairage"
 
+#define strEcranMin   "Ecran Min"
+#define strEcranMax   "Ecran Max"
+#define strLampeMin   "Lampe Min"
+#define strLampeMax   "Lampe Max"
+
+#define strTest       "Test"
+
 #define MENU_SORTIE     0
+
+// Pour le menu principal
 #define MENU_ALARME     1
 #define MENU_SOLEIL     2
 #define MENU_HEURE      3
 #define MENU_ECLAIRAGE  4
 
-#define NB_MENU 5
+// Pour le menu d'éclairage
+#define MENU_ECRAN_MIN  1
+#define MENU_ECRAN_MAX  2
+#define MENU_SOLEIN_MIN 3
+#define MENU_SOLEIL_MAX 4
 
-char* optsMainMenu[] = {strSortie, strAlarme, strSoleil, strHeure, strEclairage};
+char* optsMenuPrincipal[] = {strSortie, strAlarme, strSoleil, strHeure, strEclairage};
+char* optsMenuEclairage[] = {strSortie+1, strEcranMin, strEcranMax, strLampeMin, strLampeMax};
 char** strMenus;
+
+enum Ecran {
+  ECRAN_HEURE,
+  ECRAN_MENU_PRINCIPAL,
+  ECRAN_MENU_ECLAIRAGE
+  };
 
 typedef struct{
   int heures;
@@ -78,15 +101,13 @@ typedef struct{
   int secondes;} Heure;
 
 typedef struct{
+  enum Ecran ecran;
   char* titre;
   int nbOptions;
-  char* strMenus[];
+  char** strOptions;
   } Menu;
 
-Menu menuPrincipal, menuEclairage;
-
 Heure heure, alarme;
-void reglageHeure(Heure* h, int type);
 
 enum Config{
   ALARM_ON = 1,
@@ -101,12 +122,6 @@ enum Bouton{
   MENU = 4
   };
 
-enum Ecran {
-  ECRAN_HEURE,
-  ECRAN_PRINCIPAL,
-  ECRAN_ECLAIRAGE
-  };
-
 enum Maj {
   MAJ_RIEN = 0,         // communs
   MAJ_CLEAR = 1,
@@ -117,11 +132,17 @@ enum Maj {
   MAJ_ALARME = 16,
   MAJ_SOLEIL = 32,
   
-  MAJ_FLECHE = 2,       // Menu principal
-  MAJ_REGL_HEURE = 4,
-  MAJ_REGL_ALARME = 8,
-  MAJ_REGL_SOLEIL = 16,
-  MAJ_REGL_MENU = 32,
-  MAJ_CURS = 64,
+  MAJ_FLECHE = 2,       // Menu
+  MAJ_MENU   = 4,
+  MAJ_CURS = 8,
+  
+  MAJ_REGL_HEURE = 16,   // Menu  Principal
+  MAJ_REGL_ALARME = 32,
+  MAJ_REGL_SOLEIL = 64,
+  
+  MAJ_ECR_MIN = 16,  // Menu Eclairage
+  MAJ_ECR_MAX = 32,
   };
+  
+void reglageHeure(Heure* h,enum Maj type);
 #endif

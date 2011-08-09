@@ -51,4 +51,120 @@
 #define D5    BIT2
 #define D6    BIT1
 #define D7    BIT0
+
+static void __inline__ Delay(register unsigned int n)
+{
+    __asm__ __volatile__ (
+		"1: \n"
+		" dec	%[n] \n nop \n nop \n nop \n"
+		" jne	1b \n"
+        : [n] "+r"(n));
+}
+
+void LCDPulseEnable(){
+  LCD_PORT &= ~E;
+  LCD_PORT |= E;
+  //Delay(1);
+  LCD_PORT &= ~E;
+}
+
+void LCDWrite4Bits(unsigned char value)
+{
+  if(value & 0x01) LCD_PORT |= D4; else LCD_PORT&=~D4;
+  if(value & 0x02) LCD_PORT |= D5; else LCD_PORT&=~D5; 
+  if(value & 0x04) LCD_PORT |= D6; else LCD_PORT&=~D6; 
+  if(value & 0x08) LCD_PORT |= D7; else LCD_PORT&=~D7; 
+  
+  LCDPulseEnable();
+  Delay(200);
+}
+
+
+void LCDSend(unsigned char value, unsigned char mode) {
+    P1OUT |= BIT6;
+    if (mode==SEND_CHR) LCD_PORT |= RS; else LCD_PORT &= ~RS;
+    LCDWrite4Bits(value>>4);
+    LCDWrite4Bits(value);
+    P1OUT &= ~BIT6;
+}
+
+void LCDSendCustomChar()
+{
+  LCDSend(LCD_SETCGRAMADDR,SEND_CMD);
+  
+  int i;
+  for(i=0;i<8*7;i++)
+    LCDSend(customChars[i],SEND_CHR);
+
+  LCDSend(LCD_RETURNHOME,SEND_CMD);
+}
+
+//Efface la totalité de l'écran
+void LCDClear(void) {
+   LCDSend(LCD_CLEARDISPLAY,SEND_CMD);
+   Delay(100);
+}
+
+// Va a une position prédéfinie
+void LCDGotoXY(unsigned char x, unsigned char y)
+{
+  unsigned char delta;
+  switch(y){
+    case 0:
+      delta = 0x00;
+      break;
+    case 1:
+      delta = 0x40;
+      break;
+    case 2:
+      delta = 20;
+      break;
+    case 3:
+      delta = 0x40+20;
+      break;
+    default:
+      delta=0;
+  }
+  delta = delta+x;
+  LCDSend(LCD_SETDDRAMADDR|delta,SEND_CMD);
+}
+
+
+void LCDSendBigNum3(int num,int x)
+{
+  int row, col, i;
+  i=0;
+  for(row=0;row<3; row++)
+  {
+    LCDGotoXY(x,row);
+    for(col=0;col<4;col++)
+    {
+      LCDSend(bignums3[(num*12)+i],SEND_CHR);
+      i++;    
+    } 
+  }
+}
+
+void LCDWriteInt2(int num)
+{
+    LCDSend('0'+num/10,SEND_CHR);
+    LCDSend('0'+num%10,SEND_CHR);
+}
+
+void LCDWriteInt3(int num)
+{
+  LCDSend('0'+(num/100)%10,SEND_CHR);
+  LCDSend('0'+(num/10)%10,SEND_CHR);
+  LCDSend('0'+num%10,SEND_CHR);
+}
+
+void LCDWriteInt4(int num)
+{
+  LCDSend('0'+num/1000,SEND_CHR);
+  LCDSend('0'+(num/100)%10,SEND_CHR);
+  LCDSend('0'+(num/10)%10,SEND_CHR);
+  LCDSend('0'+num%10,SEND_CHR);
+}
+
+
 #endif
