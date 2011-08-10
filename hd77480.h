@@ -81,11 +81,9 @@ void LCDWrite4Bits(unsigned char value)
 
 
 void LCDSend(unsigned char value, unsigned char mode) {
-    P1OUT |= BIT6;
     if (mode==SEND_CHR) LCD_PORT |= RS; else LCD_PORT &= ~RS;
     LCDWrite4Bits(value>>4);
     LCDWrite4Bits(value);
-    P1OUT &= ~BIT6;
 }
 
 void LCDSendCustomChar()

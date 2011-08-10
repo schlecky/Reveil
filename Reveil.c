@@ -4,13 +4,15 @@
 #include "reveil.h"
 #include "hd77480.h"
 
-Menu mPrincipal, mEclairage;
+Menu mPrincipal, mEclairage, mHeure;
 Menu* menu;
-
-int annee, mois, jour, jourSem;
-int delaiSoleil; //temps de lever du soleil en minutes
-int WDTcnt, DCFCnt, interTimer, blTimer, blFadeValue, blFade, blFadeStep;
-int maj;
+Heure alarme, debutAlarme;
+Date date;
+//int annee, mois, jour, jourSem;
+int deltaX;
+int delaiSoleil; // temps de lever du soleil en minutes
+int avanceO2;    // avance en minutes spécifique 02
+int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, blFade, blFadeStep;
 int blMax, blMin;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
@@ -28,25 +30,32 @@ NAKED(_reset_vector__)
 	__asm__ __volatile__("br #main"::);
 }
 
-void LCDWriteHeure(Heure heure)
+void LCDWriteHeure(Heure* h)
 {
-  LCDWriteInt2(heure.heures);
+  LCDWriteInt2(h->heures);
   LCDSend(':',SEND_CHR);
-  LCDWriteInt2(heure.minutes);
+  LCDWriteInt2(h->minutes);
 }
 
-void LCDWriteDate()
+void LCDWriteJourSem()
 {
-  LCDGotoXY(0,3);  
   int i;
   for(i=0;i<3;i++)
-    LCDSend(nomJours[3*jourSem+i],SEND_CHR);
-  LCDSend(' ',SEND_CHR);
-  LCDWriteInt2(jour);
+    LCDSend(nomJours[3*date.jourSem+i],SEND_CHR);  
+}
+
+void LCDWriteDate(int wrtJourSem)
+{ 
+  if(wrtJourSem)
+  {
+    LCDWriteJourSem(); 
+    LCDSend(' ',SEND_CHR);
+  }
+  LCDWriteInt2(date.jour);
   LCDSend('/',SEND_CHR);
-  LCDWriteInt2(mois);
+  LCDWriteInt2(date.mois);
   LCDSend('/',SEND_CHR);
-  LCDWriteInt4(annee);
+  LCDWriteInt4(date.annee);
 }
 
 void LCDWriteString(unsigned char* str)
@@ -61,11 +70,16 @@ void LCDWriteString(unsigned char* str)
 void LCDWriteHeure3()
 {
   LCDSend(LCD_RETURNHOME,SEND_CMD);
-  LCDSendBigNum3(heure.heures/10,0);
-  LCDSendBigNum3(heure.heures%10,5);
-  LCDSendBigNum3(heure.minutes/10,10);
-  LCDSendBigNum3(heure.minutes%10,15);
-  
+ 
+  LCDSendBigNum3(date.heure.heures/10,0);
+  LCDSendBigNum3(date.heure.heures%10,5);
+  LCDSendBigNum3(date.heure.minutes/10,10);
+  LCDSendBigNum3(date.heure.minutes%10,15);
+ /*
+  LCDSendBigNum3(debutAlarme.heures/10,0);
+  LCDSendBigNum3(debutAlarme.heures%10,5);
+  LCDSendBigNum3(debutAlarme.minutes/10,10);
+  LCDSendBigNum3(debutAlarme.minutes%10,15);*/
   //double points
   LCDGotoXY(9,1);
   LCDSend(3,SEND_CHR);
@@ -114,6 +128,13 @@ void setBL(int bl)
   TA1CCR1 = BL_FADE_MAX-bl;
 }
 
+// definie l'intensité de l'éclairage du soleil, intens est entre 0 et LAMP_FADE_MAX
+void setLamp(int intens)
+{
+  TA0CCR1 = LAMP_FADE_MAX-pwm[intens];
+  //TA0CCR1 = LAMP_FADE_MAX-intens;
+}
+
 // change l'etat de l'indicateur DCF
 void blinkDCF()
 {
@@ -126,9 +147,9 @@ void dispAlarme()
 {
   LCDGotoXY(19,1);
   if(config & ALARM_ON)
-    LCDSend(' ',SEND_CHR);
-  else
     LCDSend(4,SEND_CHR);
+  else
+    LCDSend(' ',SEND_CHR);
 }
 
 // Met a jour le symbole du soleil
@@ -136,9 +157,9 @@ void dispSoleil()
 {
   LCDGotoXY(19,2);
   if(config & SOLEIL_ON)
-    LCDSend(' ',SEND_CHR);
-  else
     LCDSend(6,SEND_CHR);
+  else
+    LCDSend(' ',SEND_CHR);
 }
 
 // procedure de mise à jour de l'affichage
@@ -169,8 +190,10 @@ void affichageHeure()
     
 
   if(aMAJ & MAJ_DATE)
-    LCDWriteDate();
-
+  {
+    LCDGotoXY(0,3); 
+    LCDWriteDate(1);
+  }
   aMAJ = MAJ_RIEN;
 }
 
@@ -187,12 +210,14 @@ void affichageMenu()
     LCDClear();
     switch(menu->ecran){
       case ECRAN_MENU_PRINCIPAL:
-        aMAJ |= MAJ_REGL_HEURE | MAJ_REGL_ALARME | MAJ_REGL_SOLEIL | MAJ_FLECHE ;
+        aMAJ |= MAJ_REGL_ALARME | MAJ_REGL_SOLEIL | MAJ_FLECHE ;
         break;
       case ECRAN_MENU_ECLAIRAGE:
         aMAJ |= MAJ_ECR_MIN | MAJ_ECR_MAX | MAJ_FLECHE;
         break;
-        }
+      case ECRAN_MENU_HEURE:
+        aMAJ |= MAJ_REGL_HEURE | MAJ_REGL_DATE | MAJ_REGL_JOURSEM | MAJ_REGL_AVANCEO2 | MAJ_FLECHE ;
+    }
     LCDGotoXY(MENU_X,0);
     LCDWriteString(menu->titre);
     
@@ -219,25 +244,16 @@ void affichageMenu()
     LCDSend(0x7E,SEND_CHR);
   }
   
+  // Menu principal
   if(menu->ecran == ECRAN_MENU_PRINCIPAL)
   {
-    if(aMAJ & MAJ_REGL_HEURE)
-    { 
-      int y=(menu->nbOptions+MENU_HEURE-shiftMenu+1)%menu->nbOptions;
-      if((y>0) & (y<4))
-      {
-        LCDGotoXY(PARAMS_X ,y);
-        LCDWriteHeure(heure);
-      }
-    }
-    
     if(aMAJ & MAJ_REGL_ALARME)
     {  
       int y=(menu->nbOptions+MENU_ALARME-shiftMenu+1)%menu->nbOptions;
       if((y>0) & (y<4))
       {
         LCDGotoXY(PARAMS_X ,y);
-        LCDWriteHeure(alarme);
+        LCDWriteHeure(&alarme);
       }
     }
     
@@ -253,6 +269,7 @@ void affichageMenu()
     }
   }
   
+  // Menu de reglage de la lumière
   if(menu->ecran == ECRAN_MENU_ECLAIRAGE)
   {
     if(aMAJ & MAJ_ECR_MIN)
@@ -278,6 +295,49 @@ void affichageMenu()
     }
   }
   
+  // Menu de reglage de l'horloge
+  if(menu->ecran == ECRAN_MENU_HEURE)
+  {
+    if(aMAJ & MAJ_REGL_HEURE)
+    { 
+      int y=(menu->nbOptions+MENU_HEURE_HEURE-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteHeure(&(date.heure));
+      }
+    }
+    
+    if(aMAJ & MAJ_REGL_DATE)
+    { 
+      int y=(menu->nbOptions+MENU_HEURE_DATE-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteDate(0);
+      }
+    }
+    if(aMAJ & MAJ_REGL_JOURSEM)
+    { 
+      int y=(menu->nbOptions+MENU_HEURE_JOUR-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteJourSem();
+      }
+    }
+    if(aMAJ & MAJ_REGL_AVANCEO2)
+    { 
+      int y=(menu->nbOptions+MENU_HEURE_AVANCE-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteInt2(avanceO2);
+        LCDWriteString(" min");
+      }
+    }
+  }
+  
   if(aMAJ & MAJ_CURS)
   if(cursOn)
   {
@@ -289,108 +349,80 @@ void affichageMenu()
   aMAJ = MAJ_RIEN;
 }
 
-void reglageInt(int* num, int min, int max,enum Maj type)
+void calcDebutAlarme()
+{
+  debutAlarme = alarme;
+  int i;
+  for(i=0;i<delaiSoleil;i++)
+  {
+    debutAlarme.minutes--;
+    if(debutAlarme.minutes==-1)
+    {
+      debutAlarme.minutes = 59;
+      debutAlarme.heures--;
+      if(debutAlarme.heures ==-1)
+        debutAlarme.heures = 23;
+    }
+  }
+}
+
+void reglageInt(int* num, int min, int max,int step,enum Maj type)
 {
     aMAJ |= MAJ_CURS;
     cursOn=1;
-    cursX = PARAMS_X;
+    cursX = PARAMS_X+deltaX;
     cursY = select;
-    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX))
+    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX)& (ecran==ECRAN_MENU_ECLAIRAGE))
       setBL(*num);
     while(btnAppuye != MENU)
     {
-      if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX))
+      if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX) & (ecran==ECRAN_MENU_ECLAIRAGE))
         setBL(*num);
       if(aMAJ)
         affichageMenu();
       switch(btnAppuye){
         case HAUT :
           btnAppuye = AUCUN;
-          if(*num<max)
-            *num += 1;
+          *num += step;
+          if(*num>max)
+            *num-=1+max-min;
           aMAJ |= type;
           break;
         case BAS :
           btnAppuye = AUCUN;
-          if(*num>min)
-          *num -= 1;
+          *num -= step;
+           if(*num<min)
+            *num+=max-min+1;
           aMAJ |= type;
           break;
       }
     }
     btnAppuye = AUCUN;
-    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX))
+    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX)& (ecran==ECRAN_MENU_ECLAIRAGE))
       setBL(blFadeValue);
     aMAJ |= MAJ_CURS;
     cursOn=0;
 }
 
+void reglageDate(Date* d,enum Maj type)
+{
+    deltaX=1;
+    reglageInt(&(d->jour),0,31,1,type);
+    deltaX=4;
+    reglageInt(&(d->mois),0,12,1,type);
+    deltaX=9;
+    reglageInt(&(d->annee),0,3000,1,type);
+}
+
+
 void reglageHeure(Heure* h,enum Maj type)
 {
-    aMAJ |= MAJ_CURS;
-    cursOn=1;
-    cursX = PARAMS_X+1;
-    cursY = select;
-    while(btnAppuye != MENU)
-    {
-      if(aMAJ)
-        affichageMenu();
-      switch(btnAppuye){
-        case HAUT :
-          btnAppuye = AUCUN;
-          h->heures = (h->heures+1)%24;
-          aMAJ |= type;
-          break;
-        case BAS :
-          btnAppuye = AUCUN;
-          h->heures = (h->heures+23)%24;
-          aMAJ |= type;
-          break;
-      }
-    }
-    aMAJ |= MAJ_CURS;
-    btnAppuye = AUCUN;
-    cursX = PARAMS_X+3;
-    while(btnAppuye != MENU)
-    {
-    if(aMAJ)
-      affichageMenu();
-    switch(btnAppuye){
-      case HAUT :
-        btnAppuye = AUCUN;
-        h->minutes = (h->minutes+10)%60;
-        aMAJ |= type;
-        break;
-      case BAS :
-        btnAppuye = AUCUN;
-        h->minutes = (h->minutes+50)%60;
-        aMAJ |= type;
-        break;
-      }
-    }
-    cursX = PARAMS_X+4;
-    btnAppuye = AUCUN;
-    aMAJ |= MAJ_CURS;
-    while(btnAppuye != MENU)
-    {
-    if(aMAJ)
-      affichageMenu();
-    switch(btnAppuye){
-      case HAUT :
-        btnAppuye = AUCUN;
-        h->minutes = h->minutes-h->minutes%10 + (h->minutes+1)%10;
-        aMAJ |= type;
-        break;
-      case BAS :
-        btnAppuye = AUCUN;
-        h->minutes = h->minutes-h->minutes%10 + (h->minutes+9)%10;
-        aMAJ |= type;
-        break;
-      }
-    }
-    btnAppuye = AUCUN;
-    aMAJ |= MAJ_CURS;
-    cursOn=0;
+    deltaX=1;
+    reglageInt(&(h->heures),0,23,1,type);
+    deltaX=3;
+    reglageInt(&(h->minutes),0,59,10,type);
+    deltaX=4;
+    reglageInt(&(h->minutes),0,59,1,type);
 }
 
 void setMenu(Menu* m)
@@ -449,7 +481,6 @@ void menuEclairage()
     if(btnAppuye == MENU)
     {
       btnAppuye = AUCUN;
-      btnAppuye = AUCUN;
       int selectionne = (shiftMenu+select-1)%menu->nbOptions;
       switch(selectionne)
       {
@@ -458,11 +489,52 @@ void menuEclairage()
           break;
         
         case MENU_ECRAN_MIN:
-          reglageInt(&blMin,0,100,MAJ_ECR_MIN);
+          deltaX=2;
+          reglageInt(&blMin,0,100,1,MAJ_ECR_MIN);
           break;
         
         case MENU_ECRAN_MAX:
-          reglageInt(&blMax,0,100,MAJ_ECR_MAX);
+          deltaX=2;
+          reglageInt(&blMax,0,100,1,MAJ_ECR_MAX);
+          break;
+      }
+    }
+  }
+}
+
+void menuHeure()
+{
+  setMenu(&mHeure);
+  aMAJ |= MAJ_MENU;
+  while(1)
+  {
+    gereMenu(); //gere les fleches haut-bas
+    if(btnAppuye == MENU)
+    {
+      btnAppuye = AUCUN;
+      int selectionne = (shiftMenu+select-1)%menu->nbOptions;
+      switch(selectionne)
+      {
+        case MENU_SORTIE:
+          return;
+          break;
+        
+        case MENU_HEURE_HEURE:
+          reglageHeure(&(date.heure),MAJ_REGL_HEURE);
+          break;
+          
+        case MENU_HEURE_JOUR:
+          deltaX=2;
+          reglageInt(&(date.jourSem),0,6,1,MAJ_REGL_JOURSEM);
+          break;
+          
+        case MENU_HEURE_AVANCE:
+          deltaX=1;
+          reglageInt(&avanceO2,0,99,1,MAJ_REGL_AVANCEO2);
+          break;
+          
+        case MENU_HEURE_DATE:
+          reglageDate(&date,MAJ_REGL_DATE);
           break;
       }
     }
@@ -488,12 +560,17 @@ void menuPrincipal()
           break;
         case MENU_ALARME:
           reglageHeure(&alarme,MAJ_REGL_ALARME);
+          calcDebutAlarme();
           break;
         case MENU_HEURE:
-          reglageHeure(&heure,MAJ_REGL_HEURE); 
+          menuHeure();  
+          setMenu(&mPrincipal);
+          aMAJ |= MAJ_MENU;
           break;
         case MENU_SOLEIL:
-          reglageInt(&delaiSoleil,0,99,MAJ_REGL_SOLEIL);
+          deltaX=1;
+          reglageInt(&delaiSoleil,0,99,1,MAJ_REGL_SOLEIL);
+          calcDebutAlarme();
           break;
         case MENU_ECLAIRAGE:
           menuEclairage();  
@@ -529,15 +606,16 @@ void Loop()
   // Dans le mode d'affichage de l'heure, le bouton haut definit si l'alarme est activée
   case HAUT:
     config ^= ALARM_ON;
-    //alarmSet = !alarmSet;
     aMAJ |= MAJ_ALARME;
     btnAppuye = AUCUN;
     break;
     
   // Dans le mode d'affichage de l'heure, le bouton bas definit si le lever de soleil est activée
   case BAS:
-    //soleilSet = !soleilSet;
     config ^= SOLEIL_ON;
+    config &=~ LEVER_SOLEIL;
+    soleilValue=0;
+    setLamp(soleilValue);
     aMAJ |= MAJ_SOLEIL;
     btnAppuye = AUCUN;
     break;
@@ -582,15 +660,19 @@ void main (void)
   TA1CCTL1 = OUTMOD_6;
   TA1CTL = TASSEL_2 | MC_3;   //Selectionne l'horloge rapide et mode up/down
   
+  // PWM Lampe
+  LAMP_SEL |= LAMP_PIN;
+  TA0CCR0 = 1024;
+  TA0CCTL1 = OUTMOD_6;
+  TA0CTL = TASSEL_2 | MC_3;  //Selectionne l'horloge rapide et mode up/down
+  
   // interruption sur les boutons
   BTN_IES |= BTN_MENU|BTN_HAUT|BTN_BAS; // high to low transition
   BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;  // interruptions activées
   
   DCF_IE |= DCF_DAT;    // interruption activée
   DCF_IES |= DCF_DAT;   // high to low transition
-  
-  maj=1;
-  
+
   config =0;
   
   // retro-éclairage
@@ -599,26 +681,41 @@ void main (void)
   setBL(blMin);
   
   // parametres par défaut
-  jour = 31;
-  mois = 12;
-  annee = 1983;
-  jourSem = 1;
-  heure.heures = 23;
-  heure.minutes = 58;
-  delaiSoleil = 40;
+  date.jour = 31;
+  date.mois = 12;
+  date.annee = 1983;
+  date.jourSem = 1;
+  avanceO2 = 3;
   
-  //definition des menus
+  deltaX=0;
+  
+  date.heure.heures = 23;
+  date.heure.minutes = 58;
+  delaiSoleil = 3;
+  
+  // definition des menus
+  // Menu principal
   mPrincipal.titre = strReglage;
   mPrincipal.nbOptions = 5;
   mPrincipal.strOptions = optsMenuPrincipal;
   mPrincipal.ecran = ECRAN_MENU_PRINCIPAL;
   
+  // Menu Eclairage
   mEclairage.titre = strEclairage+1;    //+1 pour supprimer l'espace du début
   mEclairage.nbOptions = 5;
   mEclairage.strOptions = optsMenuEclairage;
   mEclairage.ecran = ECRAN_MENU_ECLAIRAGE;
   
+  // Menu Heure
+  mHeure.titre = strHorloge;
+  mHeure.nbOptions = 5;
+  mHeure.strOptions = optsMenuHeure;
+  mHeure.ecran = ECRAN_MENU_HEURE;
+  
   aMAJ = MAJ_HEURE3 | MAJ_DATE | MAJ_DCF | MAJ_SOLEIL | MAJ_ALARME;
+  
+  setLamp(soleilValue=0);
+  
   while(1)
   {
     Loop();
@@ -716,37 +813,54 @@ interrupt (WDT_VECTOR) Watchdog(void)
   if(WDTcnt==64)
   {
     WDTcnt=0;
-    heure.secondes++;
+    date.heure.secondes++;
+    if(config & LEVER_SOLEIL)
+    {
+      soleilTimer++;
+      if(soleilTimer>delaiSoleil)
+      {
+        soleilTimer=0;
+        soleilValue+=1;
+        if(soleilValue > FADE_COUNT-1)
+        {
+          soleilValue = FADE_COUNT-1;
+          config &= ~LEVER_SOLEIL; 
+        }
+        setLamp(soleilValue);
+
+      }
+    }
+    
     if(blTimer>0)
       if(--blTimer==0)
       {
         blFade=1;
         blFadeStep = -BL_FADE_STEP;
       }
-    if(heure.secondes==60)
+    if(date.heure.secondes==60)
     {
-      heure.secondes=0;
-      heure.minutes++;
-      if(heure.minutes==60)
+      date.heure.secondes=0;
+      date.heure.minutes++;
+      if(date.heure.minutes==60)
       {
-       heure.minutes=0;
-       heure.heures++;
-       if(heure.heures==24)
+       date.heure.minutes=0;
+       date.heure.heures++;
+       if(date.heure.heures==24)
        {
-        heure.heures=0;
-        jour++;
-        if(jourSem<6)
-          jourSem++;
+        date.heure.heures=0;
+        date.jour++;
+        if(date.jourSem<6)
+          date.jourSem++;
         else
-          jourSem=0;
-        if(jour>jourDansMois[mois-1])        
+          date.jourSem=0;
+        if(date.jour>jourDansMois[date.mois-1])        
         {
-          jour=1;
-          mois++;
-          if(mois==13)
+          date.jour=1;
+          date.mois++;
+          if(date.mois==13)
           {
-            mois=1;
-            annee++;
+            date.mois=1;
+            date.annee++;
           }
         }
         if(ecran == ECRAN_HEURE)
@@ -755,6 +869,13 @@ interrupt (WDT_VECTOR) Watchdog(void)
       }
       if(ecran == ECRAN_HEURE)
         aMAJ|= MAJ_HEURE3;
+        
+      // Est-ce que le soleil doit se lever ?
+      if(config & SOLEIL_ON) 
+        if((date.heure.heures == debutAlarme.heures) & (date.heure.minutes == debutAlarme.minutes))
+        {
+          config |= LEVER_SOLEIL; 
+        }
     }
   }
 }
