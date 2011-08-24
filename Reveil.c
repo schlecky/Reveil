@@ -16,6 +16,7 @@ int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, 
 int blMax, blMin;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
+int iMusique, musiqueCnt;
 enum Maj aMAJ;
 enum Ecran ecran;
 enum Config config;
@@ -88,51 +89,26 @@ void LCDWriteHeure3()
 }
 
 
-void LCDInit(void)
-{ 
-  LCD_PORT &= ~(RS|E);
-  
-  // we start in 8bit mode, try to set 4 bit mode
-  LCDWrite4Bits(0x03);
-  Delay(15000);
-  LCDWrite4Bits(0x03);
-  Delay(500);
-  LCDWrite4Bits(0x03);
-  Delay(500);
-  LCDWrite4Bits(0x02);
-  Delay(1000);
-  
-  LCDSend(0x28,SEND_CMD);
-  Delay(100);
-  LCDSend(0x08,SEND_CMD);
-  Delay(100);
-  LCDSend(0x01,SEND_CMD);
-  Delay(100);  
-  LCDSend(0x06,SEND_CMD);
-  Delay(100); 
-  LCDSend(0x0C,SEND_CMD);
-  Delay(100); 
 
-  LCDSend(LCD_FUNCTIONSET |LCD_4BITMODE | LCD_2LINE | LCD_5x8DOTS, SEND_CMD);
-  Delay(100);
-  LCDSend(LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF, SEND_CMD);
-  Delay(100);
-  LCDSend(LCD_ENTRYMODESET | LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT, SEND_CMD);
-
-  LCDSendCustomChar();
-}
 
 // definie l'intensité de l'éclairage de l'écran, bl est entre 0 et BL_FADE_MAX
 void setBL(int bl)
 {
-  TA1CCR1 = BL_FADE_MAX-bl;
+  TA1CCR2 = BL_FADE_MAX-bl;
 }
 
 // definie l'intensité de l'éclairage du soleil, intens est entre 0 et LAMP_FADE_MAX
 void setLamp(int intens)
 {
-  TA0CCR1 = LAMP_FADE_MAX-pwm[intens];
+  TA1CCR1 = LAMP_FADE_MAX-pwm[intens];
   //TA0CCR1 = LAMP_FADE_MAX-intens;
+}
+
+// define la frequence du haut parleur
+void setFreqHP(int freq, int vol)
+{
+  TA0CCR0 = frequence[freq];
+  TA0CCR1 = TA0CCR0 - vol;
 }
 
 // change l'etat de l'indicateur DCF
@@ -624,16 +600,28 @@ void Loop()
   }
 }
 
+/*
+void __low_level_init()
+{
+  WDTCTL = WDTPW + WDTHOLD;
+} 
+*/
+
 void main (void)
 { 
-  // Timer watchdog, sert à compter le temps
+/*
   WDTCTL = WDTPW + WDTHOLD;     // Stop watchdog timer
+  P1DIR = 0xFF;
+  LCDSend4Bits(0xFF);
+  */
+
+  // Timer watchdog, sert à compter le temps
   WDTCTL = WDTPW + WDTCNTCL + WDTTMSEL + WDTSSEL + WDTIS1;
   BCSCTL3 |= LFXT1S0 | XCAP_3;
   WDTcnt=0;
 
   P1DIR = 0xFF;                        // Port1 = Output
-  P2DIR = BIT0 | BIT2;                 // Port2 = Output pour DCF powerOn et BL
+  //P2DIR = BIT0 | BIT2;                 // Port2 = Output pour DCF powerOn et BL
   // resistances pull-up boutons
   BTN_REN |= BTN_MENU|BTN_HAUT|BTN_BAS;
   BTN_OUT |= BTN_MENU|BTN_HAUT|BTN_BAS;
@@ -642,29 +630,49 @@ void main (void)
   DCF_REN |= DCF_DAT;
   DCF_OUT |= DCF_DAT;
   
-  BL_DIR |= BL_PIN;
-  
   IE1 |= WDTIE;
   WRITE_SR(GIE); 		            //Enable global interrupts
   BCSCTL1 = CALBC1_1MHZ;        // run at 1Mhz
   DCOCTL = CALDCO_1MHZ;
 
   LCDInit();          //Initialise l'écran
-    
+
   // dcf power on il faut mettre le pin à 0 pour l'activer
   DCF_OUT &=~ DCF_PON;
   
   // PWM bl
+  BL_DIR |= BL_PIN;
   BL_SEL |= BL_PIN;
   TA1CCR0 = BL_FADE_MAX;
-  TA1CCTL1 = OUTMOD_6;
-  TA1CTL = TASSEL_2 | MC_3;   //Selectionne l'horloge rapide et mode up/down
+  TA1CCTL2 = OUTMOD_6;
+  TA1CTL = TASSEL_2 | MC_3 ;   //Selectionne l'horloge rapide et mode up/down
   
   // PWM Lampe
+  LAMP_DIR |= LAMP_PIN;
   LAMP_SEL |= LAMP_PIN;
-  TA0CCR0 = 1024;
-  TA0CCTL1 = OUTMOD_6;
-  TA0CTL = TASSEL_2 | MC_3;  //Selectionne l'horloge rapide et mode up/down
+  TA1CCTL1 = OUTMOD_6;
+  //TA0CTL = TASSEL_2 | MC_3;  //Selectionne l'horloge rapide et mode up/down
+  
+  // sortie inverseur
+  INV_DIR |= INV_PIN;
+  INV_SEL |= INV_PIN;
+  TA1CCTL0 = OUTMOD_4;
+  
+  // Haut parleur
+  HP_DIR |= HP_PIN;
+  HP_SEL |= HP_PIN;
+  TA0CTL = TASSEL_2 | MC_1;
+  
+  config =0;
+  
+  HPOff;
+  iMusique = 0;
+  musiqueCnt = 0;
+  config |= JOUE_MUSIQUE;
+  
+  //setFreqHP(1,50);
+  HPOn;
+  
   
   // interruption sur les boutons
   BTN_IES |= BTN_MENU|BTN_HAUT|BTN_BAS; // high to low transition
@@ -673,7 +681,7 @@ void main (void)
   DCF_IE |= DCF_DAT;    // interruption activée
   DCF_IES |= DCF_DAT;   // high to low transition
 
-  config =0;
+  
   
   // retro-éclairage
   blMin = 3;
@@ -778,6 +786,21 @@ interrupt (WDT_VECTOR) Watchdog(void)
 {
   WDTcnt++; // il faut compter 64 fois pour une seconde.
   DCFCnt++; // Il faut compter 9 fois (=156 ms) avant de vérifier DCF : si signal=low->1 sinon ->0 
+  
+  if(config & JOUE_MUSIQUE)
+  {
+    musiqueCnt++;
+    if(musiqueCnt==60)
+    {
+      musiqueCnt = 0;
+      setFreqHP(musique[iMusique],20);
+      if(++iMusique == NMUSIQUE)
+      {
+        config &= ~JOUE_MUSIQUE;
+        HPOff;
+      }
+    }
+  }
   
   // Il faut vérifier DCF
   if(DCFCnt==9)

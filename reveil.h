@@ -3,37 +3,47 @@
 
 #define MAX_MENU_OPTIONS 5
 
-#define DCF_OUT   P2OUT
-#define DCF_IE    P2IE
-#define DCF_REN   P2REN
-#define DCF_IES   P2IES
-#define DCF_PON   BIT0
-#define DCF_DAT   BIT1
+#define DCF_OUT   P1OUT
+#define DCF_IE    P1IE
+#define DCF_REN   P1REN
+#define DCF_IES   P1IES
+#define DCF_PON   BIT2
+#define DCF_DAT   BIT3
 
 #define BTN_REN   P2REN
 #define BTN_OUT   P2OUT
 #define BTN_IES   P2IES
 #define BTN_IE    P2IE
 #define BTN_IFG   P2IFG
-#define BTN_MENU  BIT3
-#define BTN_HAUT  BIT4
-#define BTN_BAS   BIT5
+#define BTN_MENU  BIT0
+#define BTN_HAUT  BIT5
+#define BTN_BAS   BIT2
 
 #define DELAI_INTER 10
 
 #define BL_DIR    P2DIR
-#define BL_PIN    BIT2
+#define BL_PIN    BIT4
 #define BL_SEL    P2SEL
-#define BL_FADE_MAX   100
-#define BL_FADE_STEP  5
+#define BL_FADE_MAX   1024
+#define BL_FADE_STEP  50
 
-#define LAMP_DIR  P1DIR
-#define LAMP_PIN  BIT6
-#define LAMP_OUT  P1OUT
-#define LAMP_SEL  P1SEL
+#define LAMP_DIR  P2DIR
+#define LAMP_PIN  BIT1
+#define LAMP_OUT  P2OUT
+#define LAMP_SEL  P2SEL
 #define LAMP_FADE_MAX   1024
 #define LAMP_FADE_STEP  1
 
+#define INV_DIR P2DIR
+#define INV_PIN BIT3
+#define INV_SEL P2SEL
+
+#define HP_PIN BIT6
+#define HP_SEL P1SEL
+#define HP_DIR P1DIR
+
+#define HPOff TA0CCTL1 = OUTMOD_0
+#define HPOn TA0CCTL1 = OUTMOD_3
 
 #define PARAMS_X  10
 #define MENU_X  6
@@ -61,6 +71,21 @@ const unsigned char bignums3[] = {
                                   1, 0, 0, 1, 1, 0, 0, 1, 0, 1, 1, 0,                       // 8
                                   1, 0, 0, 1, 0, 1, 1, 255, 1, 1, 1, 0                      // 9
                                   };
+                                  
+#define DO 1 
+#define RE 2 
+#define MI 3 
+#define FA 4 
+#define SOL 5 
+#define LA 6 
+#define SI 7
+
+#define NMUSIQUE 14
+const unsigned char musique[14] = { DO, DO, DO, DO, DO, DO, DO, DO, DO, DO, DO, SOL, MI, RE};                                  
+                                  
+const int frequence[7] = {4000, 3000, 2500, 2000, 1500, 1300, 1100 };
+                                  
+                                  
          
 #define FADE_COUNT 60           
 const int pwm[60] = {0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 8, 10, 11, 12, 14, 
@@ -145,7 +170,8 @@ enum Config{
   ALARM_ON = 1,
   DCF_ON = 2,
   SOLEIL_ON = 4,
-  LEVER_SOLEIL = 8
+  LEVER_SOLEIL = 8,
+  JOUE_MUSIQUE = 16,
   };
 
 enum Bouton{

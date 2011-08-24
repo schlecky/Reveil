@@ -45,12 +45,18 @@
 
 #define LCD_PORT  P1OUT
 
+/*
 #define RS    BIT5
 #define E     BIT4    
 #define D4  	BIT3		
 #define D5    BIT2
 #define D6    BIT1
 #define D7    BIT0
+*/
+
+#define LCD_CLK BIT1
+#define LCD_DAT BIT0
+#define E       BIT7 
 
 static void __inline__ Delay(register unsigned int n)
 {
@@ -68,6 +74,14 @@ void LCDPulseEnable(){
   LCD_PORT &= ~E;
 }
 
+void LCDPulseClock(){
+  LCD_PORT &= ~LCD_CLK;
+  LCD_PORT |= LCD_CLK;
+  Delay(10);
+  LCD_PORT &= ~LCD_CLK;
+}
+
+/*
 void LCDWrite4Bits(unsigned char value)
 {
   if(value & 0x01) LCD_PORT |= D4; else LCD_PORT&=~D4;
@@ -78,12 +92,38 @@ void LCDWrite4Bits(unsigned char value)
   LCDPulseEnable();
   Delay(200);
 }
+*/
 
+// Envoie 4 bits en série
+void LCDSend4Bits(unsigned char value)
+{
+  int i;
+  unsigned char v = value;
+  for(i=0; i<4; i++)
+  {
+    if(v & 0x08) LCD_PORT |= LCD_DAT; else LCD_PORT&=~LCD_DAT;
+    LCDPulseClock();
+    v = v*2;
+    //value << 1;
+  }
+}
 
 void LCDSend(unsigned char value, unsigned char mode) {
+    /*
     if (mode==SEND_CHR) LCD_PORT |= RS; else LCD_PORT &= ~RS;
     LCDWrite4Bits(value>>4);
-    LCDWrite4Bits(value);
+    LCDWrite4Bits(value);*/
+
+    LCDSend4Bits(value>>4);
+    if (mode==SEND_CHR) LCD_PORT |= LCD_DAT; else LCD_PORT &= ~LCD_DAT;
+    LCDPulseClock();
+    LCDPulseEnable();
+    Delay(200);
+    LCDSend4Bits(value);
+    if (mode==SEND_CHR) LCD_PORT |= LCD_DAT; else LCD_PORT &= ~LCD_DAT;
+    LCDPulseClock();
+    LCDPulseEnable();
+    Delay(200);
 }
 
 void LCDSendCustomChar()
@@ -164,5 +204,53 @@ void LCDWriteInt4(int num)
   LCDSend('0'+num%10,SEND_CHR);
 }
 
+void LCDInit(void)
+{ 
+  LCD_PORT &= ~(E|LCD_CLK);
+  
+  // we start in 8bit mode, try to set 4 bit mode
+  LCDSend4Bits(0x03);
+  LCD_PORT &= ~LCD_DAT;
+  LCDPulseClock();
+  LCDPulseEnable();
+  Delay(15000);
+  
+  LCDSend4Bits(0x03);
+  LCD_PORT &= ~LCD_DAT;
+  LCDPulseClock();
+  LCDPulseEnable();
+  Delay(500);
+  
+  LCDSend4Bits(0x03);
+  LCD_PORT &= ~LCD_DAT;
+  LCDPulseClock();
+  LCDPulseEnable();
+  Delay(500);
+  
+  LCDSend4Bits(0x02);
+  LCD_PORT &= ~LCD_DAT;
+  LCDPulseClock();
+  LCDPulseEnable();
+  Delay(1000);
+  
+  LCDSend(0x28,SEND_CMD);
+  Delay(100);
+  LCDSend(0x08,SEND_CMD);
+  Delay(100);
+  LCDSend(0x01,SEND_CMD);
+  Delay(100);  
+  LCDSend(0x06,SEND_CMD);
+  Delay(100); 
+  LCDSend(0x0C,SEND_CMD);
+  Delay(100); 
+
+  LCDSend(LCD_FUNCTIONSET |LCD_4BITMODE | LCD_2LINE | LCD_5x8DOTS, SEND_CMD);
+  Delay(100);
+  LCDSend(LCD_DISPLAYCONTROL | LCD_DISPLAYON | LCD_CURSOROFF | LCD_BLINKOFF, SEND_CMD);
+  Delay(100);
+  LCDSend(LCD_ENTRYMODESET | LCD_ENTRYLEFT | LCD_ENTRYSHIFTDECREMENT, SEND_CMD);
+
+  LCDSendCustomChar();
+}
 
 #endif
