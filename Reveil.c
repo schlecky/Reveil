@@ -789,10 +789,10 @@ interrupt (WDT_VECTOR) Watchdog(void)
   
   if(config & JOUE_MUSIQUE)
   {
-    musiqueCnt++;
-    if(musiqueCnt==60)
+    musiqueCnt--;
+    if(musiqueCnt==0)
     {
-      musiqueCnt = 0;
+      musiqueCnt = musique_tempo[iMusique];
       setFreqHP(musique[iMusique],20);
       if(++iMusique == NMUSIQUE)
       {

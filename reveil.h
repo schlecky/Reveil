@@ -72,18 +72,29 @@ const unsigned char bignums3[] = {
                                   1, 0, 0, 1, 0, 1, 1, 255, 1, 1, 1, 0                      // 9
                                   };
                                   
-#define DO 1 
-#define RE 2 
-#define MI 3 
-#define FA 4 
-#define SOL 5 
-#define LA 6 
-#define SI 7
+#define DO    0 
+#define DOd   1 
+#define RE    2 
+#define REd   3 
+#define MI    4 
+#define FA    5 
+#define FAd   6
+#define SOL   7
+#define SOLd  8
+#define LA    9 
+#define LAd   10 
+#define SI    11
+
+#define T1 6
+#define T2 T1*2
+#define T3 T1*3
+#define T4 T1*4
 
 #define NMUSIQUE 14
-const unsigned char musique[14] = { DO, DO, DO, DO, DO, DO, DO, DO, DO, DO, DO, SOL, MI, RE};                                  
+const unsigned char musique[14] = { DO, DO, DO, RE, MI, RE, DO, MI, RE, RE, DO, SOL, MI, RE};      
+const unsigned char musique_tempo[14] = {T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2};                               
                                   
-const int frequence[7] = {4000, 3000, 2500, 2000, 1500, 1300, 1100 };
+const int frequence[12] = {3822, 3608, 3405, 3214, 3033, 2863, 2703, 2551, 2408, 2273, 2145, 2025};
                                   
                                   
          
