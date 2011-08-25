@@ -16,7 +16,7 @@ int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, 
 int blMax, blMin;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
-int iMusique, musiqueCnt;
+int iMusique, musiqueCnt, volume;
 enum Maj aMAJ;
 enum Ecran ecran;
 enum Config config;
@@ -94,14 +94,14 @@ void LCDWriteHeure3()
 // definie l'intensité de l'éclairage de l'écran, bl est entre 0 et BL_FADE_MAX
 void setBL(int bl)
 {
-  TA1CCR2 = BL_FADE_MAX-bl;
+  //TA1CCR2 = BL_FADE_MAX-bl;
+  TA1CCR2 = BL_FADE_MAX-pwm[bl];
 }
 
 // definie l'intensité de l'éclairage du soleil, intens est entre 0 et LAMP_FADE_MAX
 void setLamp(int intens)
 {
   TA1CCR1 = LAMP_FADE_MAX-pwm[intens];
-  //TA0CCR1 = LAMP_FADE_MAX-intens;
 }
 
 // define la frequence du haut parleur
@@ -109,6 +109,13 @@ void setFreqHP(int freq, int vol)
 {
   TA0CCR0 = frequence[freq];
   TA0CCR1 = TA0CCR0 - vol;
+}
+
+inline void sonneAlarme()
+{
+  config |= JOUE_MUSIQUE; 
+  iMusique = 0;
+  musiqueCnt = 2;
 }
 
 // change l'etat de l'indicateur DCF
@@ -348,11 +355,11 @@ void reglageInt(int* num, int min, int max,int step,enum Maj type)
     cursOn=1;
     cursX = PARAMS_X+deltaX;
     cursY = select;
-    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX)& (ecran==ECRAN_MENU_ECLAIRAGE))
+    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
       setBL(*num);
     while(btnAppuye != MENU)
     {
-      if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX) & (ecran==ECRAN_MENU_ECLAIRAGE))
+      if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
         setBL(*num);
       if(aMAJ)
         affichageMenu();
@@ -466,12 +473,12 @@ void menuEclairage()
         
         case MENU_ECRAN_MIN:
           deltaX=2;
-          reglageInt(&blMin,0,100,1,MAJ_ECR_MIN);
+          reglageInt(&blMin,0,FADE_COUNT,1,MAJ_ECR_MIN);
           break;
         
         case MENU_ECRAN_MAX:
           deltaX=2;
-          reglageInt(&blMax,0,100,1,MAJ_ECR_MAX);
+          reglageInt(&blMax,0,FADE_COUNT,1,MAJ_ECR_MAX);
           break;
       }
     }
@@ -668,9 +675,8 @@ void main (void)
   HPOff;
   iMusique = 0;
   musiqueCnt = 0;
+  volume = 5;
   config |= JOUE_MUSIQUE;
-  
-  //setFreqHP(1,50);
   HPOn;
   
   
@@ -685,7 +691,7 @@ void main (void)
   
   // retro-éclairage
   blMin = 3;
-  blMax = BL_FADE_MAX;
+  blMax = FADE_COUNT-1;
   setBL(blMin);
   
   // parametres par défaut
@@ -698,7 +704,8 @@ void main (void)
   deltaX=0;
   
   date.heure.heures = 23;
-  date.heure.minutes = 58;
+  date.heure.minutes = 59;
+  date.heure.secondes = 50;                                                           
   delaiSoleil = 3;
   
   // definition des menus
@@ -790,13 +797,17 @@ interrupt (WDT_VECTOR) Watchdog(void)
   if(config & JOUE_MUSIQUE)
   {
     musiqueCnt--;
+    if(musiqueCnt==2)
+      HPOff;
     if(musiqueCnt==0)
     {
+      HPOn;
       musiqueCnt = musique_tempo[iMusique];
-      setFreqHP(musique[iMusique],20);
+      setFreqHP(musique[iMusique],volume);
       if(++iMusique == NMUSIQUE)
       {
         config &= ~JOUE_MUSIQUE;
+        iMusique = 0;
         HPOff;
       }
     }
@@ -840,7 +851,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
     if(config & LEVER_SOLEIL)
     {
       soleilTimer++;
-      if(soleilTimer>delaiSoleil)
+      if(soleilTimer>=delaiSoleil)
       {
         soleilTimer=0;
         soleilValue+=1;
@@ -898,6 +909,11 @@ interrupt (WDT_VECTOR) Watchdog(void)
         if((date.heure.heures == debutAlarme.heures) & (date.heure.minutes == debutAlarme.minutes))
         {
           config |= LEVER_SOLEIL; 
+        }
+      if(config & ALARM_ON) 
+        if((date.heure.heures == alarme.heures) & (date.heure.minutes == alarme.minutes))
+        {
+          sonneAlarme();
         }
     }
   }

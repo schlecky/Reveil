@@ -84,22 +84,23 @@ const unsigned char bignums3[] = {
 #define LA    9 
 #define LAd   10 
 #define SI    11
+#define DO_2    12
 
-#define T1 6
+#define T1 30
 #define T2 T1*2
 #define T3 T1*3
 #define T4 T1*4
 
-#define NMUSIQUE 14
-const unsigned char musique[14] = { DO, DO, DO, RE, MI, RE, DO, MI, RE, RE, DO, SOL, MI, RE};      
-const unsigned char musique_tempo[14] = {T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2, T2};                               
+#define NMUSIQUE 34
+const unsigned char musique[NMUSIQUE] = { LA, LA, LA, SI, DO_2, SI, LA, DO_2, SI, SI, LA, LA, LA, LA, SI, DO_2, SI, LA, DO_2, SI, SI, LA, SI, SI, SI, SI, FA, FA, SI, LA, SOL, FA, MI};      
+const unsigned char musique_tempo[NMUSIQUE] = {T1, T1, T1, T1, T2, T2, T1, T1, T1, T1, T3, T1, T1, T1, T1, T2, T2, T1, T1, T1, T1, T3, T1, T1, T1, T1, T2, T2, T1, T1, T1, T1, T3};                               
                                   
-const int frequence[12] = {3822, 3608, 3405, 3214, 3033, 2863, 2703, 2551, 2408, 2273, 2145, 2025};
+const int frequence[13] = {3822, 3608, 3405, 3214, 3033, 2863, 2703, 2551, 2408, 2273, 2145, 2025, 1911};
                                   
                                   
          
 #define FADE_COUNT 60           
-const int pwm[60] = {0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 8, 10, 11, 12, 14, 
+const int pwm[FADE_COUNT] = {0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 8, 10, 11, 12, 14, 
                      16, 17, 20, 22, 25, 28, 32, 35, 40, 45, 50, 57, 64, 71, 80, 90, 101, 114, 
                      128, 143, 161, 181, 203, 228, 256, 287, 322, 362, 406, 456, 512, 574, 645, 
                      724, 812, 912, 1024};
