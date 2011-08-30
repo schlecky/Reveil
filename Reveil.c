@@ -94,7 +94,6 @@ void LCDWriteHeure3()
 // definie l'intensité de l'éclairage de l'écran, bl est entre 0 et BL_FADE_MAX
 void setBL(int bl)
 {
-  //TA1CCR2 = BL_FADE_MAX-bl;
   TA1CCR2 = BL_FADE_MAX-pwm[bl];
 }
 
@@ -105,9 +104,9 @@ void setLamp(int intens)
 }
 
 // define la frequence du haut parleur
-void setFreqHP(int freq, int vol)
+void setFreqHP(int freq,int octave, int vol)
 {
-  TA0CCR0 = frequence[freq];
+  TA0CCR0 = (frequence[freq]>>octave)<<2;
   TA0CCR1 = TA0CCR0 - vol;
 }
 
@@ -675,7 +674,7 @@ void main (void)
   HPOff;
   iMusique = 0;
   musiqueCnt = 0;
-  volume = 5;
+  volume = 100  ;
   config |= JOUE_MUSIQUE;
   HPOn;
   
@@ -705,7 +704,7 @@ void main (void)
   
   date.heure.heures = 23;
   date.heure.minutes = 59;
-  date.heure.secondes = 50;                                                           
+  date.heure.secondes = 58;                                                           
   delaiSoleil = 3;
   
   // definition des menus
@@ -745,6 +744,16 @@ interrupt (TIMERA0_VECTOR) Timer_A (void)
 }
 */
 
+// Port 2 interrupt service routine
+interrupt (PORT1_VECTOR) Port_1(void)
+{
+    if(P1IFG & DCF_DAT)
+    {
+      blinkDCF();
+      P1IFG &= ~DCF_DAT;
+    }
+}
+
 
 // Port 2 interrupt service routine
 interrupt (PORT2_VECTOR) Port_2(void)
@@ -781,14 +790,9 @@ interrupt (PORT2_VECTOR) Port_2(void)
       btnAppuye = BAS;
       P2IFG &=~BTN_BAS;
     }  
-    if(P2IFG & DCF_DAT)
-    {
-      blinkDCF();
-      P2IFG &= ~DCF_DAT;
-    }
 }
 
-// Port 1 interrupt service routine
+// Watchdog interrupt service routine
 interrupt (WDT_VECTOR) Watchdog(void)
 {
   WDTcnt++; // il faut compter 64 fois pour une seconde.
@@ -802,9 +806,11 @@ interrupt (WDT_VECTOR) Watchdog(void)
     if(musiqueCnt==0)
     {
       HPOn;
-      musiqueCnt = musique_tempo[iMusique];
-      setFreqHP(musique[iMusique],volume);
-      if(++iMusique == NMUSIQUE)
+      musiqueCnt = musique[iMusique++];     // duree de la note
+      int note = musique[iMusique++];
+      int octave = musique[iMusique++];
+      setFreqHP(note,octave,volume);  // frequence prenant en compte l'octave
+      if(iMusique == 3*NMUSIQUE)
       {
         config &= ~JOUE_MUSIQUE;
         iMusique = 0;
@@ -906,12 +912,12 @@ interrupt (WDT_VECTOR) Watchdog(void)
         
       // Est-ce que le soleil doit se lever ?
       if(config & SOLEIL_ON) 
-        if((date.heure.heures == debutAlarme.heures) & (date.heure.minutes == debutAlarme.minutes))
+        if((date.heure.heures == debutAlarme.heures) && (date.heure.minutes == debutAlarme.minutes))
         {
           config |= LEVER_SOLEIL; 
         }
       if(config & ALARM_ON) 
-        if((date.heure.heures == alarme.heures) & (date.heure.minutes == alarme.minutes))
+        if((date.heure.heures == alarme.heures) && (date.heure.minutes == alarme.minutes))
         {
           sonneAlarme();
         }

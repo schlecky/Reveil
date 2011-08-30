@@ -55,12 +55,11 @@ const unsigned char customChars[] = { 31, 31, 31, 31, 0, 0, 0, 0,       // carac
                                       0, 14, 21, 23, 17, 14, 0, 0,      // caractere2 : horloge
                                       4, 14, 14, 4, 0, 0, 0, 0,         // caractere3 : point haut
                                       4, 14, 14, 14, 31, 0, 4, 0,       // caractere4 : cloche
-                                      0, 14, 17, 4, 10, 0, 4, 0,       // caractere5 : DCF
+                                      0, 14, 17, 4, 10, 0, 4, 0,        // caractere5 : DCF
                                       4, 21, 14, 27, 14, 21, 4, 0,      // caractere6 : Soleil                            
                                     };
 
-const unsigned char bignums3[] = {
-                                  1, 0, 0, 1, 255, ' ', ' ', 255, 0, 1, 1, 0,               // 0
+const unsigned char bignums3[] = {1, 0, 0, 1, 255, ' ', ' ', 255, 0, 1, 1, 0,               // 0
                                   ' ', ' ', 1, 255, ' ', 0, ' ', 255, ' ', ' ', ' ', 255,   // 1
                                   1, 0, 0, 1, ' ', 1, 1, 0, 255, 1, 1, 1,                   // 2
                                   0, 0, 0, 1, ' ', 0, 0, 1, 0, 1, 1, 0,                     // 3
@@ -84,18 +83,19 @@ const unsigned char bignums3[] = {
 #define LA    9 
 #define LAd   10 
 #define SI    11
-#define DO_2    12
+#define P     12
 
-#define T1 30
-#define T2 T1*2
-#define T3 T1*3
-#define T4 T1*4
+//const int frequence[13] = {1911, 1804, 1703, 1607, 1517, 1432, 1351, 1276, 1203, 2272, 2145, 2025, 0};
+const int frequence[13] = {1911, 1804, 1703, 1607, 1517, 1432, 1351, 1276, 1203, 1136, 1072, 1012, 1};
 
-#define NMUSIQUE 34
-const unsigned char musique[NMUSIQUE] = { LA, LA, LA, SI, DO_2, SI, LA, DO_2, SI, SI, LA, LA, LA, LA, SI, DO_2, SI, LA, DO_2, SI, SI, LA, SI, SI, SI, SI, FA, FA, SI, LA, SOL, FA, MI};      
-const unsigned char musique_tempo[NMUSIQUE] = {T1, T1, T1, T1, T2, T2, T1, T1, T1, T1, T3, T1, T1, T1, T1, T2, T2, T1, T1, T1, T1, T3, T1, T1, T1, T1, T2, T2, T1, T1, T1, T1, T3};                               
+//macgyver
+#define T 4
+
+//#define NMUSIQUE 1
+//const unsigned char musique[3*NMUSIQUE] = {16*T,DO, 0};
+#include "musique.c"                          
                                   
-const int frequence[13] = {3822, 3608, 3405, 3214, 3033, 2863, 2703, 2551, 2408, 2273, 2145, 2025, 1911};
+
                                   
                                   
          
