@@ -3,6 +3,7 @@
 
 #define MAX_MENU_OPTIONS 5
 
+#define DCF_DIR   P1DIR
 #define DCF_OUT   P1OUT
 #define DCF_IE    P1IE
 #define DCF_REN   P1REN
@@ -25,7 +26,7 @@
 #define BL_PIN    BIT4
 #define BL_SEL    P2SEL
 #define BL_FADE_MAX   1024
-#define BL_FADE_STEP  50
+#define BL_FADE_STEP  1
 
 #define LAMP_DIR  P2DIR
 #define LAMP_PIN  BIT1
@@ -47,6 +48,8 @@
 
 #define PARAMS_X  10
 #define MENU_X  6
+
+#define DELAI_SNOOZE 10;
 
 const unsigned char nomJours[] = "LunMarMerJeuVenSamDim";
 
@@ -85,8 +88,8 @@ const unsigned char bignums3[] = {1, 0, 0, 1, 255, ' ', ' ', 255, 0, 1, 1, 0,   
 #define SI    11
 #define P     12
 
-//const int frequence[13] = {1911, 1804, 1703, 1607, 1517, 1432, 1351, 1276, 1203, 2272, 2145, 2025, 0};
-const int frequence[13] = {1911, 1804, 1703, 1607, 1517, 1432, 1351, 1276, 1203, 1136, 1072, 1012, 1};
+//const int frequence[12] = {1911, 1804, 1703, 1607, 1517, 1432, 1351, 1276, 1203, 1136, 1072, 1012};
+const int frequence[12] = {3822, 3608, 3406, 3214, 3034, 2864, 2702, 2552, 2406, 2272, 2144, 2024};
 
 //macgyver
 #define T 4
@@ -184,6 +187,8 @@ enum Config{
   SOLEIL_ON = 4,
   LEVER_SOLEIL = 8,
   JOUE_MUSIQUE = 16,
+  SNOOZE = 32,
+  BL_FADE = 64,
   };
 
 enum Bouton{
@@ -212,6 +217,8 @@ enum Maj {
   
   MAJ_ECR_MIN = 16,     // Menu Eclairage
   MAJ_ECR_MAX = 32,
+  MAJ_LAMP_MIN = 64,     // Menu Eclairage
+  MAJ_LAMP_MAX = 128,
   
   MAJ_REGL_HEURE = 16,  // Menu Horloge
   MAJ_REGL_JOURSEM = 32,

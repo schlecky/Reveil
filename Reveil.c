@@ -12,7 +12,8 @@ Date date;
 int deltaX;
 int delaiSoleil; // temps de lever du soleil en minutes
 int avanceO2;    // avance en minutes spécifique 02
-int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, blFade, blFadeStep;
+int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
+int timerSnooze, volMax, volMin;
 int blMax, blMin;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
@@ -104,17 +105,33 @@ void setLamp(int intens)
 }
 
 // define la frequence du haut parleur
-void setFreqHP(int freq,int octave, int vol)
+void setFreqHP(int note,int octave, int vol)
 {
-  TA0CCR0 = (frequence[freq]>>octave)<<2;
-  TA0CCR1 = TA0CCR0 - vol;
+  if(note==P)
+  {
+    TA0CCR1 = TA0CCR0;
+    return;
+  }
+  else
+  {
+    TA0CCR0 = (frequence[note]>>octave)<<1;
+    //TA0CCR0 = (frequence[note]>>octave);
+    TA0CCR1 = TA0CCR0 - vol;
+  }
 }
 
 inline void sonneAlarme()
 {
   config |= JOUE_MUSIQUE; 
   iMusique = 0;
+  volume = volMin;
   musiqueCnt = 2;
+}
+
+inline void stopMusique()
+{
+  config &= ~JOUE_MUSIQUE;
+  HPOff;
 }
 
 // change l'etat de l'indicateur DCF
@@ -356,10 +373,14 @@ void reglageInt(int* num, int min, int max,int step,enum Maj type)
     cursY = select;
     if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
       setBL(*num);
+    if(type & (MAJ_LAMP_MIN | MAJ_LAMP_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
+      setLamp(*num);
     while(btnAppuye != MENU)
     {
       if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
         setBL(*num);
+      if(aMAJ & (MAJ_LAMP_MIN | MAJ_LAMP_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
+        setLamp(*num);
       if(aMAJ)
         affichageMenu();
       switch(btnAppuye){
@@ -382,6 +403,8 @@ void reglageInt(int* num, int min, int max,int step,enum Maj type)
     btnAppuye = AUCUN;
     if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX)& (ecran==ECRAN_MENU_ECLAIRAGE))
       setBL(blFadeValue);
+    if(aMAJ & (MAJ_LAMP_MIN | MAJ_LAMP_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
+      setLamp(soleilValue);
     aMAJ |= MAJ_CURS;
     cursOn=0;
 }
@@ -588,6 +611,7 @@ void Loop()
   // Dans le mode d'affichage de l'heure, le bouton haut definit si l'alarme est activée
   case HAUT:
     config ^= ALARM_ON;
+    config &= ~SNOOZE;
     aMAJ |= MAJ_ALARME;
     btnAppuye = AUCUN;
     break;
@@ -626,16 +650,22 @@ void main (void)
   BCSCTL3 |= LFXT1S0 | XCAP_3;
   WDTcnt=0;
 
-  P1DIR = 0xFF;                        // Port1 = Output
-  //P2DIR = BIT0 | BIT2;                 // Port2 = Output pour DCF powerOn et BL
-  // resistances pull-up boutons
-  BTN_REN |= BTN_MENU|BTN_HAUT|BTN_BAS;
-  BTN_OUT |= BTN_MENU|BTN_HAUT|BTN_BAS;
+  // setup DCF
+  DCF_DIR |= DCF_PON;
+  //DCF_DIR &= ~DCF_DAT;    //par defaut
   
   // resistance pull-up dcf 
   DCF_REN |= DCF_DAT;
   DCF_OUT |= DCF_DAT;
+  // dcf power on il faut mettre le pin à 0 pour l'activer
+  DCF_OUT &=~ DCF_PON;
   
+  LCD_DIR |= (LCD_CLK | LCD_DAT | E);
+  
+  // resistances pull-up boutons
+  BTN_REN |= BTN_MENU|BTN_HAUT|BTN_BAS;
+  BTN_OUT |= BTN_MENU|BTN_HAUT|BTN_BAS;
+    
   IE1 |= WDTIE;
   WRITE_SR(GIE); 		            //Enable global interrupts
   BCSCTL1 = CALBC1_1MHZ;        // run at 1Mhz
@@ -643,9 +673,6 @@ void main (void)
 
   LCDInit();          //Initialise l'écran
 
-  // dcf power on il faut mettre le pin à 0 pour l'activer
-  DCF_OUT &=~ DCF_PON;
-  
   // PWM bl
   BL_DIR |= BL_PIN;
   BL_SEL |= BL_PIN;
@@ -657,7 +684,6 @@ void main (void)
   LAMP_DIR |= LAMP_PIN;
   LAMP_SEL |= LAMP_PIN;
   TA1CCTL1 = OUTMOD_6;
-  //TA0CTL = TASSEL_2 | MC_3;  //Selectionne l'horloge rapide et mode up/down
   
   // sortie inverseur
   INV_DIR |= INV_PIN;
@@ -674,11 +700,8 @@ void main (void)
   HPOff;
   iMusique = 0;
   musiqueCnt = 0;
-  volume = 100  ;
-  config |= JOUE_MUSIQUE;
-  HPOn;
-  
-  
+  volMax = 100;
+
   // interruption sur les boutons
   BTN_IES |= BTN_MENU|BTN_HAUT|BTN_BAS; // high to low transition
   BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;  // interruptions activées
@@ -686,12 +709,11 @@ void main (void)
   DCF_IE |= DCF_DAT;    // interruption activée
   DCF_IES |= DCF_DAT;   // high to low transition
 
-  
-  
   // retro-éclairage
-  blMin = 3;
+  blMin = 20;
   blMax = FADE_COUNT-1;
   setBL(blMin);
+  blTimer = 0;
   
   // parametres par défaut
   date.jour = 31;
@@ -761,14 +783,21 @@ interrupt (PORT2_VECTOR) Port_2(void)
     if(P2IFG & (BTN_MENU | BTN_HAUT| BTN_BAS))
     {
       interTimer = DELAI_INTER;
-      //si pas de bl on ne prend pas en compte le bouton 
+      
+      //si pas de bl on ne prend pas en compte le bouton sauf pour arreter la musique
       if(blTimer == 0)
       {
+        if(config & JOUE_MUSIQUE)
+        {
+          stopMusique();
+          config |= SNOOZE;
+          timerSnooze = DELAI_SNOOZE;
+        }
         P2IFG &=~(BTN_MENU | BTN_HAUT| BTN_BAS);
         BTN_IE &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
         blFadeStep = BL_FADE_STEP;
         blFadeValue = blMin;
-        blFade =  1;
+        config |= BL_FADE;
       }
       blTimer=5; //5 secondes
     }
@@ -806,15 +835,16 @@ interrupt (WDT_VECTOR) Watchdog(void)
     if(musiqueCnt==0)
     {
       HPOn;
-      musiqueCnt = musique[iMusique++];     // duree de la note
+      musiqueCnt = musique[iMusique++];  // duree de la note
       int note = musique[iMusique++];
       int octave = musique[iMusique++];
-      setFreqHP(note,octave,volume);  // frequence prenant en compte l'octave
+      setFreqHP(note,octave,volume);     // frequence prenant en compte l'octave
+      if(volume<volMax) volume++;
       if(iMusique == 3*NMUSIQUE)
       {
-        config &= ~JOUE_MUSIQUE;
-        iMusique = 0;
-        HPOff;
+        config |= SNOOZE;
+        timerSnooze = DELAI_SNOOZE;
+        stopMusique();
       }
     }
   }
@@ -834,18 +864,18 @@ interrupt (WDT_VECTOR) Watchdog(void)
     }
   }
   
-  if(blFade == 1)
+  if(config & BL_FADE)
   {
     blFadeValue+=blFadeStep;
     if(blFadeValue>blMax)
     {
       blFadeValue=blMax;
-      blFade = 0;
+      config &= ~BL_FADE;
     }
     if(blFadeValue<blMin)
     {
       blFadeValue=blMin;
-      blFade = 0;
+      config &= ~BL_FADE;
     }
     setBL(blFadeValue);
   }
@@ -874,9 +904,17 @@ interrupt (WDT_VECTOR) Watchdog(void)
     if(blTimer>0)
       if(--blTimer==0)
       {
-        blFade=1;
+        config |= BL_FADE;
         blFadeStep = -BL_FADE_STEP;
       }
+    if(config & SNOOZE)
+    {
+      if(--timerSnooze==0)
+      {
+        config &= ~SNOOZE;
+        sonneAlarme();
+      }
+    }
     if(date.heure.secondes==60)
     {
       date.heure.secondes=0;
@@ -916,6 +954,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
         {
           config |= LEVER_SOLEIL; 
         }
+      // Est-ce que l'alarme doit sonner ?
       if(config & ALARM_ON) 
         if((date.heure.heures == alarme.heures) && (date.heure.minutes == alarme.minutes))
         {

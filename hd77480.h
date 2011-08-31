@@ -44,6 +44,7 @@
 #define SEND_CHR                   1
 
 #define LCD_PORT  P1OUT
+#define LCD_DIR   P1DIR
 
 /*
 #define RS    BIT5
@@ -70,14 +71,12 @@ static void __inline__ Delay(register unsigned int n)
 void LCDPulseEnable(){
   LCD_PORT &= ~E;
   LCD_PORT |= E;
-  //Delay(1);
   LCD_PORT &= ~E;
 }
 
 void LCDPulseClock(){
   LCD_PORT &= ~LCD_CLK;
   LCD_PORT |= LCD_CLK;
-  Delay(10);
   LCD_PORT &= ~LCD_CLK;
 }
 
@@ -118,12 +117,12 @@ void LCDSend(unsigned char value, unsigned char mode) {
     if (mode==SEND_CHR) LCD_PORT |= LCD_DAT; else LCD_PORT &= ~LCD_DAT;
     LCDPulseClock();
     LCDPulseEnable();
-    Delay(200);
+    Delay(100);
     LCDSend4Bits(value);
     if (mode==SEND_CHR) LCD_PORT |= LCD_DAT; else LCD_PORT &= ~LCD_DAT;
     LCDPulseClock();
     LCDPulseEnable();
-    Delay(200);
+    Delay(100);
 }
 
 void LCDSendCustomChar()
