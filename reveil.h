@@ -10,6 +10,8 @@
 #define DCF_IES   P1IES
 #define DCF_PON   BIT2
 #define DCF_DAT   BIT3
+#define DCF_POW_ON    DCF_OUT &= ~DCF_PON
+#define DCF_POW_OFF   DCF_OUT |= DCF_PON
 
 #define BTN_REN   P2REN
 #define BTN_OUT   P2OUT
@@ -20,7 +22,7 @@
 #define BTN_HAUT  BIT5
 #define BTN_BAS   BIT2
 
-#define DELAI_INTER 10
+#define DELAI_INTER 20
 
 #define BL_DIR    P2DIR
 #define BL_PIN    BIT4
@@ -38,10 +40,19 @@
 #define INV_DIR P2DIR
 #define INV_PIN BIT3
 #define INV_SEL P2SEL
+#define INV_ON  TA1CCTL0 = OUTMOD_4
+#define INV_OFF TA1CCTL0 = OUTMOD_0
 
 #define HP_PIN BIT6
 #define HP_SEL P1SEL
 #define HP_DIR P1DIR
+
+#define POW_PIN BIT4
+#define POW_IN  P1IN
+#define POW_DIR P1DIR
+#define POW_IES P1IES
+#define POW_IE  P1IE
+#define POW_IFG P1IFG
 
 #define HPOff TA0CCTL1 = OUTMOD_0
 #define HPOn TA0CCTL1 = OUTMOD_3
@@ -96,11 +107,7 @@ const int frequence[12] = {3822, 3608, 3406, 3214, 3034, 2864, 2702, 2552, 2406,
 
 //#define NMUSIQUE 1
 //const unsigned char musique[3*NMUSIQUE] = {16*T,DO, 0};
-#include "musique.c"                          
-                                  
-
-                                  
-                                  
+#include "musique.c"                                                         
          
 #define FADE_COUNT 60           
 const int pwm[FADE_COUNT] = {0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 8, 8, 10, 11, 12, 14, 
@@ -117,6 +124,7 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define strSortie     " Sortie"
 #define strSoleil     "\6Soleil"
 #define strEclairage  " Eclairage"
+#define strSon        "\4Son"
 
 #define strEcranMin   "Ecran Min"
 #define strEcranMax   "Ecran Max"
@@ -128,6 +136,10 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define strDate       "Date"
 #define strAvanceDCF  "O2"
 
+#define strVolMin     "Vol. Min"
+#define strVolMax     "Vol. Max"
+#define strSonnerie   "Sonnerie"
+
 #define strTest       "Test"
 
 #define MENU_SORTIE     0
@@ -137,6 +149,7 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define MENU_SOLEIL     2
 #define MENU_HEURE      3
 #define MENU_ECLAIRAGE  4
+#define MENU_SON        5
 
 // Pour le menu d'éclairage
 #define MENU_ECRAN_MIN  1
@@ -150,16 +163,28 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define MENU_HEURE_DATE   3
 #define MENU_HEURE_AVANCE 4
 
-char* optsMenuPrincipal[] = {strSortie, strAlarme, strSoleil, strHorloge, strEclairage};
-char* optsMenuEclairage[] = {strSortie+1, strEcranMin, strEcranMax, strLampeMin, strLampeMax};
-char* optsMenuHeure[] = {strSortie+1, strHeure, strJour, strDate, strAvanceDCF};
-char** strMenus;
+// Pour le menu du son
+#define MENU_SON_SONNERIE 1
+#define MENU_SON_VOLMIN   2
+#define MENU_SON_VOLMAX   3
+
+const char* optsMenuPrincipal[] = {strSortie, strAlarme, strSoleil, strHorloge, strEclairage, strSon};
+const char* optsMenuEclairage[] = {strSortie+1, strEcranMin, strEcranMax, strLampeMin, strLampeMax};
+const char* optsMenuHeure[] = {strSortie+1, strHeure, strJour, strDate, strAvanceDCF};
+const char* optsMenuSon[] = {strSortie+1, strSonnerie, strVolMin, strVolMax};
+
+#define NMUSIQUES 3
+const char* strMusiques[] = {"McGyver  ","P Martini","Bells    "};
+const unsigned char *musiques[NBMUSIQUES] = {&macgyver[0],&pink_martini[0]};
+
+//char** strMenus;
 
 enum Ecran {
   ECRAN_HEURE,
   ECRAN_MENU_PRINCIPAL,
   ECRAN_MENU_ECLAIRAGE,
-  ECRAN_MENU_HEURE
+  ECRAN_MENU_HEURE,
+  ECRAN_MENU_SON
   };
 
 typedef struct{
@@ -178,7 +203,7 @@ typedef struct{
   enum Ecran ecran;
   char* titre;
   int nbOptions;
-  char** strOptions;
+  const char** strOptions;
   } Menu;
 
 enum Config{
@@ -201,6 +226,7 @@ enum Bouton{
 enum Maj {
   MAJ_RIEN = 0,         // communs
   MAJ_CLEAR = 1,
+  MAJ_INIT = 1024,
   
   MAJ_HEURE3 = 2,       // Ecran principal
   MAJ_DATE = 4,
@@ -217,13 +243,17 @@ enum Maj {
   
   MAJ_ECR_MIN = 16,     // Menu Eclairage
   MAJ_ECR_MAX = 32,
-  MAJ_LAMP_MIN = 64,     // Menu Eclairage
+  MAJ_LAMP_MIN = 64,    
   MAJ_LAMP_MAX = 128,
   
   MAJ_REGL_HEURE = 16,  // Menu Horloge
   MAJ_REGL_JOURSEM = 32,
   MAJ_REGL_DATE = 64,
-  MAJ_REGL_AVANCEO2 = 128,   
+  MAJ_REGL_AVANCEO2 = 128,
+  
+  MAJ_REGL_SONNERIE = 16,  // Menu son
+  MAJ_REGL_VOLMIN   = 32,
+  MAJ_REGL_VOLMAX = 64   
   };
   
 void reglageHeure(Heure* h,enum Maj type);

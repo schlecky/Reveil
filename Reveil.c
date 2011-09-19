@@ -4,7 +4,7 @@
 #include "reveil.h"
 #include "hd77480.h"
 
-Menu mPrincipal, mEclairage, mHeure;
+Menu mPrincipal, mEclairage, mHeure, mSon;
 Menu* menu;
 Heure alarme, debutAlarme;
 Date date;
@@ -13,11 +13,13 @@ int deltaX;
 int delaiSoleil; // temps de lever du soleil en minutes
 int avanceO2;    // avance en minutes spécifique 02
 int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
-int timerSnooze, volMax, volMin;
+int timerSnooze, volMax, volMin, numSonnerie;
 int blMax, blMin;
+int power;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
-int iMusique, musiqueCnt, volume;
+int iMusique, musiqueCnt, volume, nMusique;
+const unsigned char *musique;
 enum Maj aMAJ;
 enum Ecran ecran;
 enum Config config;
@@ -60,7 +62,7 @@ void LCDWriteDate(int wrtJourSem)
   LCDWriteInt4(date.annee);
 }
 
-void LCDWriteString(unsigned char* str)
+void LCDWriteString(const unsigned char* str)
 {
   int i;
   for(i=0; str[i]!=0; i++)
@@ -123,7 +125,9 @@ void setFreqHP(int note,int octave, int vol)
 inline void sonneAlarme()
 {
   config |= JOUE_MUSIQUE; 
-  iMusique = 0;
+  musique = musiques[numSonnerie];
+  nMusique = musique[0]*3+1;
+  iMusique = 1;
   volume = volMin;
   musiqueCnt = 2;
 }
@@ -166,6 +170,8 @@ void affichageHeure()
 {
   if(aMAJ == MAJ_RIEN)
     return;    
+  if(aMAJ & MAJ_INIT)
+    LCDInit();     
   if(aMAJ & MAJ_CLEAR)
     LCDClear();        
   
@@ -216,6 +222,8 @@ void affichageMenu()
         break;
       case ECRAN_MENU_HEURE:
         aMAJ |= MAJ_REGL_HEURE | MAJ_REGL_DATE | MAJ_REGL_JOURSEM | MAJ_REGL_AVANCEO2 | MAJ_FLECHE ;
+      case ECRAN_MENU_SON:
+        aMAJ |= MAJ_REGL_SONNERIE | MAJ_REGL_VOLMIN | MAJ_REGL_VOLMAX | MAJ_FLECHE ;
     }
     LCDGotoXY(MENU_X,0);
     LCDWriteString(menu->titre);
@@ -333,6 +341,40 @@ void affichageMenu()
         LCDGotoXY(PARAMS_X ,y);
         LCDWriteInt2(avanceO2);
         LCDWriteString(" min");
+      }
+    }
+  }
+  
+  // Menu de reglage du son
+  if(menu->ecran == ECRAN_MENU_SON)
+  {
+    if(aMAJ & MAJ_REGL_SONNERIE)
+    { 
+      int y=(menu->nbOptions+MENU_SON_SONNERIE-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteString(strMusiques[numSonnerie]);
+      }
+    }
+    
+    if(aMAJ & MAJ_REGL_VOLMIN)
+    { 
+      int y=(menu->nbOptions+MENU_SON_VOLMIN-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteInt2(volMin);
+      }
+    }
+    
+    if(aMAJ & MAJ_REGL_VOLMAX)
+    { 
+      int y=(menu->nbOptions+MENU_SON_VOLMAX-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteInt2(volMax);
       }
     }
   }
@@ -546,6 +588,41 @@ void menuHeure()
   }
 }
 
+void menuSon()
+{
+  setMenu(&mSon);
+  aMAJ |= MAJ_MENU;
+  while(1)
+  {
+    gereMenu(); //gere les fleches haut-bas
+    if(btnAppuye == MENU)
+    {
+      btnAppuye = AUCUN;
+      int selectionne = (shiftMenu+select-1)%menu->nbOptions;
+      switch(selectionne)
+      {
+        case MENU_SORTIE:
+          return;
+          break;
+        
+        case MENU_SON_SONNERIE:
+          reglageInt(&numSonnerie,0,NBMUSIQUES-1,1,MAJ_REGL_SONNERIE);
+          break;
+        case MENU_SON_VOLMAX:
+          //deltaX=2;
+          reglageInt(&volMax,0,99,1,MAJ_REGL_VOLMAX);
+          break;
+          
+        case MENU_SON_VOLMIN:
+          //deltaX=1;
+          reglageInt(&volMin,0,99,1,MAJ_REGL_VOLMIN);
+          break;
+      }
+    }
+  }
+}
+
+
 // Menu Principal
 void menuPrincipal()
 {
@@ -579,6 +656,11 @@ void menuPrincipal()
           break;
         case MENU_ECLAIRAGE:
           menuEclairage();  
+          setMenu(&mPrincipal);
+          aMAJ |= MAJ_MENU;
+          break;
+        case MENU_SON:
+          menuSon();  
           setMenu(&mPrincipal);
           aMAJ |= MAJ_MENU;
           break;
@@ -637,6 +719,27 @@ void __low_level_init()
 } 
 */
 
+void enterLowPower()
+{
+  INV_OFF;
+  DCF_POW_OFF;
+  DCF_IE &= ~DCF_DAT;
+ // BTN_OUT &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
+  BTN_IE &= ~(BTN_MENU|BTN_HAUT|BTN_BAS);
+  LCD_PORT &= ~(LCD_CLK | LCD_DAT | E);
+}
+
+void exitLowPower()
+{
+  INV_ON;
+  DCF_POW_ON;
+  DCF_IE |= DCF_DAT;
+  // resistance pull-up dcf 
+ // BTN_OUT |=(BTN_MENU|BTN_HAUT|BTN_BAS);
+  BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;
+  aMAJ = MAJ_INIT | MAJ_CLEAR | MAJ_HEURE3 | MAJ_DATE | MAJ_DCF | MAJ_SOLEIL | MAJ_ALARME;
+}
+
 void main (void)
 { 
 /*
@@ -649,7 +752,6 @@ void main (void)
   WDTCTL = WDTPW + WDTCNTCL + WDTTMSEL + WDTSSEL + WDTIS1;
   BCSCTL3 |= LFXT1S0 | XCAP_3;
   WDTcnt=0;
-
   // setup DCF
   DCF_DIR |= DCF_PON;
   //DCF_DIR &= ~DCF_DAT;    //par defaut
@@ -658,13 +760,21 @@ void main (void)
   DCF_REN |= DCF_DAT;
   DCF_OUT |= DCF_DAT;
   // dcf power on il faut mettre le pin à 0 pour l'activer
-  DCF_OUT &=~ DCF_PON;
+  DCF_POW_ON;
+    
+  DCF_IE |= DCF_DAT;    // interruption activée
+  DCF_IES |= DCF_DAT;   // high to low transition
+  
   
   LCD_DIR |= (LCD_CLK | LCD_DAT | E);
   
   // resistances pull-up boutons
   BTN_REN |= BTN_MENU|BTN_HAUT|BTN_BAS;
   BTN_OUT |= BTN_MENU|BTN_HAUT|BTN_BAS;
+  
+  // interruption sur les boutons
+  BTN_IES |= BTN_MENU|BTN_HAUT|BTN_BAS; // high to low transition
+  BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;  // interruptions activées
     
   IE1 |= WDTIE;
   WRITE_SR(GIE); 		            //Enable global interrupts
@@ -688,12 +798,27 @@ void main (void)
   // sortie inverseur
   INV_DIR |= INV_PIN;
   INV_SEL |= INV_PIN;
-  TA1CCTL0 = OUTMOD_4;
+  INV_ON;
+
   
   // Haut parleur
   HP_DIR |= HP_PIN;
   HP_SEL |= HP_PIN;
   TA0CTL = TASSEL_2 | MC_1;
+  
+  // Alimentation externe
+  if(POW_IN & POW_PIN)
+  {
+    POW_IES |= POW_PIN; // high to low transition
+  }
+  else
+  {
+    POW_IES &= ~POW_PIN; // low to high transition
+    enterLowPower();
+    LPM0;
+  }
+  POW_IE  |= POW_PIN;  // interruptions activées
+  
   
   config =0;
   
@@ -701,13 +826,10 @@ void main (void)
   iMusique = 0;
   musiqueCnt = 0;
   volMax = 100;
+  musique = &pink_martini[0];
 
-  // interruption sur les boutons
-  BTN_IES |= BTN_MENU|BTN_HAUT|BTN_BAS; // high to low transition
-  BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;  // interruptions activées
-  
-  DCF_IE |= DCF_DAT;    // interruption activée
-  DCF_IES |= DCF_DAT;   // high to low transition
+
+
 
   // retro-éclairage
   blMin = 20;
@@ -732,7 +854,7 @@ void main (void)
   // definition des menus
   // Menu principal
   mPrincipal.titre = strReglage;
-  mPrincipal.nbOptions = 5;
+  mPrincipal.nbOptions = 6;
   mPrincipal.strOptions = optsMenuPrincipal;
   mPrincipal.ecran = ECRAN_MENU_PRINCIPAL;
   
@@ -748,10 +870,16 @@ void main (void)
   mHeure.strOptions = optsMenuHeure;
   mHeure.ecran = ECRAN_MENU_HEURE;
   
+  //Menu sons
+  mSon.titre = strSon;
+  mSon.nbOptions = 4;
+  mSon.strOptions = optsMenuSon;
+  mSon.ecran = ECRAN_MENU_SON;  
+  
   aMAJ = MAJ_HEURE3 | MAJ_DATE | MAJ_DCF | MAJ_SOLEIL | MAJ_ALARME;
   
   setLamp(soleilValue=0);
-  
+        
   while(1)
   {
     Loop();
@@ -773,6 +901,23 @@ interrupt (PORT1_VECTOR) Port_1(void)
     {
       blinkDCF();
       P1IFG &= ~DCF_DAT;
+    }
+    
+    if(P1IFG & POW_PIN)
+    {
+      if(POW_IES & POW_PIN)
+      {
+        POW_IES &= ~POW_PIN;
+        enterLowPower();
+        _BIS_SR_IRQ(LPM0_bits + GIE);
+      }
+      else
+      {  
+        POW_IES |= POW_PIN;
+        exitLowPower();
+        LPM0_EXIT;
+      }
+      P1IFG &= ~POW_PIN;
     }
 }
 
@@ -840,7 +985,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
       int octave = musique[iMusique++];
       setFreqHP(note,octave,volume);     // frequence prenant en compte l'octave
       if(volume<volMax) volume++;
-      if(iMusique == 3*NMUSIQUE)
+      if(iMusique == nMusique)
       {
         config |= SNOOZE;
         timerSnooze = DELAI_SNOOZE;
