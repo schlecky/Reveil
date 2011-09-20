@@ -6,16 +6,16 @@
 
 Menu mPrincipal, mEclairage, mHeure, mSon;
 Menu* menu;
-Heure alarme, debutAlarme;
+Heure alarme, alarme2, debutAlarme;
 Date date;
 //int annee, mois, jour, jourSem;
 int deltaX;
 int delaiSoleil; // temps de lever du soleil en minutes
 int avanceO2;    // avance en minutes spécifique 02
-int WDTcnt, DCFCnt, interTimer, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
+int WDTcnt, DCFCnt, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
 int timerSnooze, volMax, volMin, numSonnerie;
+int numAlarme=0;
 int blMax, blMin;
-int power;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
 int iMusique, musiqueCnt, volume, nMusique;
@@ -117,8 +117,7 @@ void setFreqHP(int note,int octave, int vol)
   else
   {
     TA0CCR0 = (frequence[note]>>octave)<<1;
-    //TA0CCR0 = (frequence[note]>>octave);
-    TA0CCR1 = TA0CCR0 - vol;
+    TA0CCR1 = TA0CCR0 - vol*2;
   }
 }
 
@@ -138,6 +137,14 @@ inline void stopMusique()
   HPOff;
 }
 
+void beep(int vol)
+{
+  setFreqHP(1,1,vol);
+  HPOn;
+  Delay(10000);
+  HPOff;
+}
+
 // change l'etat de l'indicateur DCF
 void blinkDCF()
 {
@@ -148,8 +155,16 @@ void blinkDCF()
 // Met a jour le symbole d'alarme
 void dispAlarme()
 {
+  // alarme numero 1
   LCDGotoXY(19,1);
   if(config & ALARM_ON)
+    LCDSend(4,SEND_CHR);
+  else
+    LCDSend(' ',SEND_CHR);
+    
+  // alarme numero 2
+  LCDGotoXY(19,2);
+  if(config & ALARM2_ON)
     LCDSend(4,SEND_CHR);
   else
     LCDSend(' ',SEND_CHR);
@@ -158,7 +173,7 @@ void dispAlarme()
 // Met a jour le symbole du soleil
 void dispSoleil()
 {
-  LCDGotoXY(19,2);
+  LCDGotoXY(19,3);
   if(config & SOLEIL_ON)
     LCDSend(6,SEND_CHR);
   else
@@ -215,7 +230,7 @@ void affichageMenu()
     LCDClear();
     switch(menu->ecran){
       case ECRAN_MENU_PRINCIPAL:
-        aMAJ |= MAJ_REGL_ALARME | MAJ_REGL_SOLEIL | MAJ_FLECHE ;
+        aMAJ |= MAJ_REGL_ALARME | MAJ_REGL_ALARME2 | MAJ_REGL_SOLEIL | MAJ_FLECHE ;
         break;
       case ECRAN_MENU_ECLAIRAGE:
         aMAJ |= MAJ_ECR_MIN | MAJ_ECR_MAX | MAJ_FLECHE;
@@ -256,11 +271,21 @@ void affichageMenu()
   {
     if(aMAJ & MAJ_REGL_ALARME)
     {  
-      int y=(menu->nbOptions+MENU_ALARME-shiftMenu+1)%menu->nbOptions;
+      int y=(menu->nbOptions+MENU_ALARME1-shiftMenu+1)%menu->nbOptions;
       if((y>0) & (y<4))
       {
         LCDGotoXY(PARAMS_X ,y);
         LCDWriteHeure(&alarme);
+      }
+    }
+    
+    if(aMAJ & MAJ_REGL_ALARME2)
+    {  
+      int y=(menu->nbOptions+MENU_ALARME2-shiftMenu+1)%menu->nbOptions;
+      if((y>0) & (y<4))
+      {
+        LCDGotoXY(PARAMS_X ,y);
+        LCDWriteHeure(&alarme2);
       }
     }
     
@@ -284,9 +309,10 @@ void affichageMenu()
       int y=(menu->nbOptions+MENU_ECRAN_MIN-shiftMenu+1)%menu->nbOptions;
       if((y>0) & (y<4))
       {
-        LCDGotoXY(PARAMS_X ,y);
-        LCDWriteInt3(blMin);
-        LCDWriteString(" %");
+        LCDGotoXY(PARAMS_X+1 ,y);
+        LCDWriteInt2(blMin);      
+        LCDWriteString("/");
+        LCDWriteInt2(FADE_COUNT-1);
       }
     }
     
@@ -295,9 +321,10 @@ void affichageMenu()
       int y=(menu->nbOptions+MENU_ECRAN_MAX-shiftMenu+1)%menu->nbOptions;
       if((y>0) & (y<4))
       {
-        LCDGotoXY(PARAMS_X,y);
-        LCDWriteInt3(blMax);
-        LCDWriteString(" %");
+        LCDGotoXY(PARAMS_X+1,y);
+        LCDWriteInt2(blMax);
+        LCDWriteString("/");
+        LCDWriteInt2(FADE_COUNT-1);
       }
     }
   }
@@ -415,14 +442,12 @@ void reglageInt(int* num, int min, int max,int step,enum Maj type)
     cursY = select;
     if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
       setBL(*num);
-    if(type & (MAJ_LAMP_MIN | MAJ_LAMP_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
-      setLamp(*num);
     while(btnAppuye != MENU)
     {
       if(aMAJ & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
         setBL(*num);
-      if(aMAJ & (MAJ_LAMP_MIN | MAJ_LAMP_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
-        setLamp(*num);
+      if(aMAJ & (MAJ_REGL_VOLMIN | MAJ_REGL_VOLMAX) && (ecran == ECRAN_MENU_SON))
+        beep(*num);
       if(aMAJ)
         affichageMenu();
       switch(btnAppuye){
@@ -445,8 +470,6 @@ void reglageInt(int* num, int min, int max,int step,enum Maj type)
     btnAppuye = AUCUN;
     if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX)& (ecran==ECRAN_MENU_ECLAIRAGE))
       setBL(blFadeValue);
-    if(aMAJ & (MAJ_LAMP_MIN | MAJ_LAMP_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
-      setLamp(soleilValue);
     aMAJ |= MAJ_CURS;
     cursOn=0;
 }
@@ -537,12 +560,12 @@ void menuEclairage()
         
         case MENU_ECRAN_MIN:
           deltaX=2;
-          reglageInt(&blMin,0,FADE_COUNT,1,MAJ_ECR_MIN);
+          reglageInt(&blMin,0,FADE_COUNT-1,1,MAJ_ECR_MIN);
           break;
         
         case MENU_ECRAN_MAX:
           deltaX=2;
-          reglageInt(&blMax,0,FADE_COUNT,1,MAJ_ECR_MAX);
+          reglageInt(&blMax,0,FADE_COUNT-1,1,MAJ_ECR_MAX);
           break;
       }
     }
@@ -640,9 +663,12 @@ void menuPrincipal()
         case MENU_SORTIE:
           return;
           break;
-        case MENU_ALARME:
+        case MENU_ALARME1:
           reglageHeure(&alarme,MAJ_REGL_ALARME);
           calcDebutAlarme();
+          break;
+        case MENU_ALARME2:
+          reglageHeure(&alarme2,MAJ_REGL_ALARME2);
           break;
         case MENU_HEURE:
           menuHeure();  
@@ -692,7 +718,13 @@ void Loop()
   
   // Dans le mode d'affichage de l'heure, le bouton haut definit si l'alarme est activée
   case HAUT:
-    config ^= ALARM_ON;
+    numAlarme = (numAlarme+1)%4;
+    config &= ~(ALARM_ON | ALARM2_ON);
+    if(numAlarme & 1)
+      config |= ALARM_ON;
+    if(numAlarme & 2)
+      config |= ALARM2_ON;
+      
     config &= ~SNOOZE;
     aMAJ |= MAJ_ALARME;
     btnAppuye = AUCUN;
@@ -712,19 +744,12 @@ void Loop()
   }
 }
 
-/*
-void __low_level_init()
-{
-  WDTCTL = WDTPW + WDTHOLD;
-} 
-*/
 
 void enterLowPower()
 {
   INV_OFF;
   DCF_POW_OFF;
   DCF_IE &= ~DCF_DAT;
- // BTN_OUT &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
   BTN_IE &= ~(BTN_MENU|BTN_HAUT|BTN_BAS);
   LCD_PORT &= ~(LCD_CLK | LCD_DAT | E);
 }
@@ -734,8 +759,6 @@ void exitLowPower()
   INV_ON;
   DCF_POW_ON;
   DCF_IE |= DCF_DAT;
-  // resistance pull-up dcf 
- // BTN_OUT |=(BTN_MENU|BTN_HAUT|BTN_BAS);
   BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;
   aMAJ = MAJ_INIT | MAJ_CLEAR | MAJ_HEURE3 | MAJ_DATE | MAJ_DCF | MAJ_SOLEIL | MAJ_ALARME;
 }
@@ -815,7 +838,7 @@ void main (void)
   {
     POW_IES &= ~POW_PIN; // low to high transition
     enterLowPower();
-    LPM0;
+    LPM3;
   }
   POW_IE  |= POW_PIN;  // interruptions activées
   
@@ -838,9 +861,9 @@ void main (void)
   blTimer = 0;
   
   // parametres par défaut
-  date.jour = 31;
-  date.mois = 12;
-  date.annee = 1983;
+  date.jour = 01;
+  date.mois = 01;
+  date.annee = 2012;
   date.jourSem = 1;
   avanceO2 = 3;
   
@@ -854,13 +877,13 @@ void main (void)
   // definition des menus
   // Menu principal
   mPrincipal.titre = strReglage;
-  mPrincipal.nbOptions = 6;
+  mPrincipal.nbOptions = 7;
   mPrincipal.strOptions = optsMenuPrincipal;
   mPrincipal.ecran = ECRAN_MENU_PRINCIPAL;
   
   // Menu Eclairage
   mEclairage.titre = strEclairage+1;    //+1 pour supprimer l'espace du début
-  mEclairage.nbOptions = 5;
+  mEclairage.nbOptions = 4;
   mEclairage.strOptions = optsMenuEclairage;
   mEclairage.ecran = ECRAN_MENU_ECLAIRAGE;
   
@@ -909,13 +932,13 @@ interrupt (PORT1_VECTOR) Port_1(void)
       {
         POW_IES &= ~POW_PIN;
         enterLowPower();
-        _BIS_SR_IRQ(LPM0_bits + GIE);
+        _BIS_SR_IRQ(LPM3_bits + GIE);
       }
       else
       {  
         POW_IES |= POW_PIN;
         exitLowPower();
-        LPM0_EXIT;
+        LPM3_EXIT;
       }
       P1IFG &= ~POW_PIN;
     }
@@ -927,8 +950,6 @@ interrupt (PORT2_VECTOR) Port_2(void)
 {        
     if(P2IFG & (BTN_MENU | BTN_HAUT| BTN_BAS))
     {
-      interTimer = DELAI_INTER;
-      
       //si pas de bl on ne prend pas en compte le bouton sauf pour arreter la musique
       if(blTimer == 0)
       {
@@ -939,7 +960,6 @@ interrupt (PORT2_VECTOR) Port_2(void)
           timerSnooze = DELAI_SNOOZE;
         }
         P2IFG &=~(BTN_MENU | BTN_HAUT| BTN_BAS);
-        BTN_IE &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
         blFadeStep = BL_FADE_STEP;
         blFadeValue = blMin;
         config |= BL_FADE;
@@ -948,19 +968,16 @@ interrupt (PORT2_VECTOR) Port_2(void)
     }
     if(P2IFG & BTN_MENU)
     {
-        BTN_IE &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
         btnAppuye = MENU;
         P2IFG &=~BTN_MENU;
     }
     if(P2IFG & BTN_HAUT)
     {
-      BTN_IE &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
          btnAppuye = HAUT; 
          P2IFG &=~BTN_HAUT;   
     }
     if(P2IFG & BTN_BAS)
     {
-      BTN_IE &=~(BTN_MENU|BTN_HAUT|BTN_BAS);
       btnAppuye = BAS;
       P2IFG &=~BTN_BAS;
     }  
@@ -1000,6 +1017,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
   }
   
   // gère l'anti-rebond des boutons
+  /*
   if(interTimer)
   {
     if(--interTimer==0)
@@ -1008,7 +1026,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
       BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;
     }
   }
-  
+  */
   if(config & BL_FADE)
   {
     blFadeValue+=blFadeStep;
@@ -1099,9 +1117,15 @@ interrupt (WDT_VECTOR) Watchdog(void)
         {
           config |= LEVER_SOLEIL; 
         }
-      // Est-ce que l'alarme doit sonner ?
+      // Est-ce que l'alarme1 doit sonner ?
       if(config & ALARM_ON) 
         if((date.heure.heures == alarme.heures) && (date.heure.minutes == alarme.minutes))
+        {
+          sonneAlarme();
+        }
+      // Est-ce que l'alarme doit sonner ?
+      if(config & ALARM2_ON) 
+        if((date.heure.heures == alarme2.heures) && (date.heure.minutes == alarme2.minutes))
         {
           sonneAlarme();
         }

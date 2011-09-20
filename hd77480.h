@@ -130,7 +130,7 @@ void LCDSendCustomChar()
   LCDSend(LCD_SETCGRAMADDR,SEND_CMD);
   
   int i;
-  for(i=0;i<8*7;i++)
+  for(i=0;i<8*8;i++)
     LCDSend(customChars[i],SEND_CHR);
 
   LCDSend(LCD_RETURNHOME,SEND_CMD);

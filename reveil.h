@@ -22,8 +22,6 @@
 #define BTN_HAUT  BIT5
 #define BTN_BAS   BIT2
 
-#define DELAI_INTER 20
-
 #define BL_DIR    P2DIR
 #define BL_PIN    BIT4
 #define BL_SEL    P2SEL
@@ -70,7 +68,8 @@ const unsigned char customChars[] = { 31, 31, 31, 31, 0, 0, 0, 0,       // carac
                                       4, 14, 14, 4, 0, 0, 0, 0,         // caractere3 : point haut
                                       4, 14, 14, 14, 31, 0, 4, 0,       // caractere4 : cloche
                                       0, 14, 17, 4, 10, 0, 4, 0,        // caractere5 : DCF
-                                      4, 21, 14, 27, 14, 21, 4, 0,      // caractere6 : Soleil                            
+                                      4, 21, 14, 27, 14, 21, 4, 0,      // caractere6 : Soleil   
+                                      2,  3,  2, 14, 30, 12, 0, 0,                 // caractere7 : note de musique       
                                     };
 
 const unsigned char bignums3[] = {1, 0, 0, 1, 255, ' ', ' ', 255, 0, 1, 1, 0,               // 0
@@ -118,13 +117,14 @@ const int pwm[FADE_COUNT] = {0, 1, 1, 1, 1, 2, 2, 2, 2, 3, 3, 4, 4, 5, 5, 6, 7, 
 unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31};
 
 
-#define strAlarme     "\4Alarme"
+#define strAlarme1    "\4Alarme1"
+#define strAlarme2    "\4Alarme2"
 #define strHorloge    "\2Horloge"
 #define strReglage    "Reglages"
 #define strSortie     " Sortie"
 #define strSoleil     "\6Soleil"
 #define strEclairage  " Eclairage"
-#define strSon        "\4Son"
+#define strSon        "\7Son"
 
 #define strEcranMin   "Ecran Min"
 #define strEcranMax   "Ecran Max"
@@ -141,21 +141,21 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define strSonnerie   "Sonnerie"
 
 #define strTest       "Test"
+#define strVide       "    "
 
 #define MENU_SORTIE     0
 
 // Pour le menu principal
-#define MENU_ALARME     1
-#define MENU_SOLEIL     2
-#define MENU_HEURE      3
-#define MENU_ECLAIRAGE  4
-#define MENU_SON        5
+#define MENU_ALARME1    1
+#define MENU_ALARME2    2
+#define MENU_SOLEIL     3
+#define MENU_HEURE      4
+#define MENU_ECLAIRAGE  5
+#define MENU_SON        6
 
 // Pour le menu d'éclairage
 #define MENU_ECRAN_MIN  1
 #define MENU_ECRAN_MAX  2
-#define MENU_SOLEIN_MIN 3
-#define MENU_SOLEIL_MAX 4
 
 // Pour le menu de reglage de l'heure
 #define MENU_HEURE_HEURE  1
@@ -168,8 +168,8 @@ unsigned char jourDansMois[12] = {31, 28, 31, 30, 31, 30, 31, 31, 30, 31, 30, 31
 #define MENU_SON_VOLMIN   2
 #define MENU_SON_VOLMAX   3
 
-const char* optsMenuPrincipal[] = {strSortie, strAlarme, strSoleil, strHorloge, strEclairage, strSon};
-const char* optsMenuEclairage[] = {strSortie+1, strEcranMin, strEcranMax, strLampeMin, strLampeMax};
+const char* optsMenuPrincipal[] = {strSortie, strAlarme1, strAlarme2, strSoleil, strHorloge, strEclairage, strSon};
+const char* optsMenuEclairage[] = {strSortie+1, strEcranMin, strEcranMax, strVide};
 const char* optsMenuHeure[] = {strSortie+1, strHeure, strJour, strDate, strAvanceDCF};
 const char* optsMenuSon[] = {strSortie+1, strSonnerie, strVolMin, strVolMax};
 
@@ -214,6 +214,7 @@ enum Config{
   JOUE_MUSIQUE = 16,
   SNOOZE = 32,
   BL_FADE = 64,
+  ALARM2_ON = 128,
   };
 
 enum Bouton{
@@ -240,11 +241,10 @@ enum Maj {
   
   MAJ_REGL_ALARME = 16, // Menu  Principal
   MAJ_REGL_SOLEIL = 32,
+  MAJ_REGL_ALARME2 = 64,
   
   MAJ_ECR_MIN = 16,     // Menu Eclairage
   MAJ_ECR_MAX = 32,
-  MAJ_LAMP_MIN = 64,    
-  MAJ_LAMP_MAX = 128,
   
   MAJ_REGL_HEURE = 16,  // Menu Horloge
   MAJ_REGL_JOURSEM = 32,
