@@ -5,6 +5,7 @@
 
 #define DCF_DIR   P1DIR
 #define DCF_OUT   P1OUT
+#define DCF_IN    P1IN
 #define DCF_IE    P1IE
 #define DCF_REN   P1REN
 #define DCF_IES   P1IES
@@ -234,6 +235,7 @@ enum Maj {
   MAJ_DCF = 8,
   MAJ_ALARME = 16,
   MAJ_SOLEIL = 32,
+  MAJ_DEBUG = 64,
   
   MAJ_FLECHE = 2,       // Menu
   MAJ_MENU   = 4,

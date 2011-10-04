@@ -12,7 +12,10 @@ Date date;
 int deltaX;
 int delaiSoleil; // temps de lever du soleil en minutes
 int avanceO2;    // avance en minutes spécifique 02
-int WDTcnt, DCFCnt, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
+int WDTcnt, DCFCnt, DCFBit, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
+Date DCFDate;
+int debug;
+int DCFParite, DCFErreur;
 int timerSnooze, volMax, volMin, numSonnerie;
 int numAlarme=0;
 int blMax, blMin;
@@ -188,7 +191,13 @@ void affichageHeure()
   if(aMAJ & MAJ_INIT)
     LCDInit();     
   if(aMAJ & MAJ_CLEAR)
-    LCDClear();        
+    LCDClear();     
+  
+  if(aMAJ & MAJ_DEBUG)
+  {
+    LCDGotoXY(16,3);
+    LCDWriteInt2(debug);
+  }
   
   if(aMAJ & MAJ_HEURE3)
     LCDWriteHeure3();
@@ -855,7 +864,7 @@ void main (void)
 
 
   // retro-éclairage
-  blMin = 20;
+  blMin = 59;
   blMax = FADE_COUNT-1;
   setBL(blMin);
   blTimer = 0;
@@ -922,8 +931,24 @@ interrupt (PORT1_VECTOR) Port_1(void)
 {
     if(P1IFG & DCF_DAT)
     {
+      DCFBit++;       //prochain bit
+      if(DCFCnt>100)
+      {
+         //if(!DCFErreur && (DCFBit==59))
+         {
+          date = DCFDate;
+          aMAJ |= MAJ_HEURE3 | MAJ_DATE;
+         }
+         DCFBit = 0;
+         DCFDate.heure.minutes = DCFDate.heure.heures = DCFDate.heure.secondes = DCFDate.jourSem = DCFDate.jour = DCFDate.mois = DCFErreur = DCFParite =0;  
+         DCFDate.annee = 2000;   
+      } 
+      DCFCnt = 0;
       blinkDCF();
+      debug = DCFErreur;
+      aMAJ |= MAJ_DEBUG;
       P1IFG &= ~DCF_DAT;
+      DCF_IE &= ~DCF_DAT;
     }
     
     if(P1IFG & POW_PIN)
@@ -1011,9 +1036,140 @@ interrupt (WDT_VECTOR) Watchdog(void)
     }
   }
   
+  if(DCFCnt == 32)
+  {
+    DCF_IE |= DCF_DAT;
+    P1IFG &= ~DCF_DAT;
+  }
+        
+  
   // Il faut vérifier DCF
   if(DCFCnt==9)
   {
+    int bit = !(DCF_IN & DCF_DAT);
+    DCFParite ^=bit;
+    switch(DCFBit)
+    {
+      case 20 : 
+        DCFErreur |= bit;
+        DCFParite = 0;
+        break;
+      case 21 :
+        if(bit) DCFDate.heure.minutes+=1;
+        break;
+      case 22 :
+        if(bit) DCFDate.heure.minutes+=2;
+        break;
+      case 23 :
+        if(bit) DCFDate.heure.minutes+=4;
+        break;
+      case 24 :
+        if(bit) DCFDate.heure.minutes+=8;
+        break;
+      case 25 :
+        if(bit) DCFDate.heure.minutes+=10;
+        break;
+      case 26 :
+        if(bit) DCFDate.heure.minutes+=20;
+        break;
+      case 27 :
+        if(bit) DCFDate.heure.minutes+=40;
+        break;
+      case 28 :
+        DCFErreur |= DCFParite;
+        break;
+      case 29 :
+        if(bit) DCFDate.heure.heures+=1;
+        break;
+      case 30 :
+        if(bit) DCFDate.heure.heures+=2;
+        break;
+      case 31 :
+        if(bit) DCFDate.heure.heures+=4;
+        break;
+      case 32 :
+        if(bit) DCFDate.heure.heures+=8;
+        break;
+      case 33 :
+        if(bit) DCFDate.heure.heures+=10;
+        break;
+      case 34 :
+        if(bit) DCFDate.heure.heures+=20;
+        break;
+      case 35 :
+        DCFErreur |= DCFParite;
+        break;
+      case 36 :
+        if(bit) DCFDate.jour+=1;
+        break;
+      case 37 :
+        if(bit) DCFDate.jour+=2;
+        break;
+      case 38 :
+        if(bit) DCFDate.jour+=4;
+        break;
+      case 39 :
+        if(bit) DCFDate.jour+=8;
+        break;
+      case 40 :
+        if(bit) DCFDate.jour+=10;
+        break;
+      case 41 :
+        if(bit) DCFDate.jour+=20;
+        break;
+      case 42 :
+        if(bit) DCFDate.jourSem+=1;
+        break;
+      case 43 :
+        if(bit) DCFDate.jourSem+=2;
+        break;
+      case 44 :
+        if(bit) DCFDate.jourSem+=4;
+        break;
+      case 45 :
+        if(bit) DCFDate.mois+=1;
+        break;
+      case 46 :
+        if(bit) DCFDate.mois+=2;
+        break;
+      case 47 :
+        if(bit) DCFDate.mois+=4;
+        break;
+      case 48 :
+        if(bit) DCFDate.mois+=8;
+        break;
+      case 49 :
+        if(bit) DCFDate.mois+=10;
+        break;
+      case 50 :
+        if(bit) DCFDate.annee+=1;
+        break;
+      case 51 :
+        if(bit) DCFDate.annee+=2;
+        break;
+      case 52 :
+        if(bit) DCFDate.annee+=4;
+        break;
+      case 53 :
+        if(bit) DCFDate.annee+=8;
+        break;
+      case 54 :
+        if(bit) DCFDate.annee+=10;
+        break;
+      case 55 :
+        if(bit) DCFDate.annee+=20;
+        break;
+      case 56 :
+        if(bit) DCFDate.annee+=40;
+        break;
+      case 57 :
+        if(bit) DCFDate.annee+=80;
+        break;
+      case 58 :
+        DCFErreur |= DCFParite;
+        break;
+    }
+    
   }
   
   // gère l'anti-rebond des boutons
