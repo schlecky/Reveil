@@ -59,7 +59,7 @@
 #define PARAMS_X  10
 #define MENU_X  6
 
-#define DELAI_SNOOZE 10;
+#define DELAI_SNOOZE 300;
 
 const unsigned char nomJours[] = "LunMarMerJeuVenSamDim";
 
@@ -70,7 +70,7 @@ const unsigned char customChars[] = { 31, 31, 31, 31, 0, 0, 0, 0,       // carac
                                       4, 14, 14, 14, 31, 0, 4, 0,       // caractere4 : cloche
                                       0, 14, 17, 4, 10, 0, 4, 0,        // caractere5 : DCF
                                       4, 21, 14, 27, 14, 21, 4, 0,      // caractere6 : Soleil   
-                                      2,  3,  2, 14, 30, 12, 0, 0,                 // caractere7 : note de musique       
+                                      2,  3,  2, 14, 30, 12, 0, 0,      // caractere7 : note de musique       
                                     };
 
 const unsigned char bignums3[] = {1, 0, 0, 1, 255, ' ', ' ', 255, 0, 1, 1, 0,               // 0
@@ -106,7 +106,6 @@ const int frequence[12] = {3822, 3608, 3406, 3214, 3034, 2864, 2702, 2552, 2406,
 #define T 4
 
 //#define NMUSIQUE 1
-//const unsigned char musique[3*NMUSIQUE] = {16*T,DO, 0};
 #include "musique.c"                                                         
          
 #define FADE_COUNT 60           
@@ -174,9 +173,9 @@ const char* optsMenuEclairage[] = {strSortie+1, strEcranMin, strEcranMax, strVid
 const char* optsMenuHeure[] = {strSortie+1, strHeure, strJour, strDate, strAvanceDCF};
 const char* optsMenuSon[] = {strSortie+1, strSonnerie, strVolMin, strVolMax};
 
-#define NMUSIQUES 3
-const char* strMusiques[] = {"McGyver  ","P Martini","Bells    "};
-const unsigned char *musiques[NBMUSIQUES] = {&macgyver[0],&pink_martini[0]};
+#define NMUSIQUES 4
+const char* strMusiques[] = {"McGyver  ","P Martini","Bells    ","Deutschl."};
+const unsigned char *musiques[NBMUSIQUES] = {&macgyver[0],&pink_martini[0],&bells[0], &deutschland[0]};
 
 //char** strMenus;
 
@@ -216,6 +215,7 @@ enum Config{
   SNOOZE = 32,
   BL_FADE = 64,
   ALARM2_ON = 128,
+  FLASH_LIGHT = 256,
   };
 
 enum Bouton{

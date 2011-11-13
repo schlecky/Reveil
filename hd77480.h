@@ -63,7 +63,7 @@ static void __inline__ Delay(register unsigned int n)
 {
     __asm__ __volatile__ (
 		"1: \n"
-		" dec	%[n] \n nop \n nop \n nop \n"
+		" dec	%[n] \n nop \n nop \n nop  \n nop \n nop \n nop \n"
 		" jne	1b \n"
         : [n] "+r"(n));
 }
@@ -139,7 +139,7 @@ void LCDSendCustomChar()
 //Efface la totalité de l'écran
 void LCDClear(void) {
    LCDSend(LCD_CLEARDISPLAY,SEND_CMD);
-   Delay(100);
+   Delay(300);
 }
 
 // Va a une position prédéfinie

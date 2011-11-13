@@ -5,20 +5,20 @@
 #include "hd77480.h"
 
 Menu mPrincipal, mEclairage, mHeure, mSon;
-Menu* menu;
+Menu* menu;   // pointeur vers le menu courant
 Heure alarme, alarme2, debutAlarme;
 Date date;
-//int annee, mois, jour, jourSem;
 int deltaX;
 int delaiSoleil; // temps de lever du soleil en minutes
 int avanceO2;    // avance en minutes spécifique 02
 int WDTcnt, DCFCnt, DCFBit, soleilTimer, soleilValue, blTimer, blFadeValue, blFadeStep;
-Date DCFDate;
+Date DCFDate;    // La Date actuelle (contient l'heure)
 int debug;
 int DCFParite, DCFErreur;
 int timerSnooze, volMax, volMin, numSonnerie;
 int numAlarme=0;
 int blMax, blMin;
+int flashCnt;
 int cursOn, cursX, cursY;
 int select, oldSelect, shiftMenu;
 int iMusique, musiqueCnt, volume, nMusique;
@@ -93,9 +93,6 @@ void LCDWriteHeure3()
   LCDGotoXY(9,2);
   LCDSend(3,SEND_CHR);
 }
-
-
-
 
 // definie l'intensité de l'éclairage de l'écran, bl est entre 0 et BL_FADE_MAX
 void setBL(int bl)
@@ -761,6 +758,7 @@ void enterLowPower()
   DCF_IE &= ~DCF_DAT;
   BTN_IE &= ~(BTN_MENU|BTN_HAUT|BTN_BAS);
   LCD_PORT &= ~(LCD_CLK | LCD_DAT | E);
+  config &= ~(ALARM_ON | SOLEIL_ON | ALARM2_ON);
 }
 
 void exitLowPower()
@@ -774,12 +772,6 @@ void exitLowPower()
 
 void main (void)
 { 
-/*
-  WDTCTL = WDTPW + WDTHOLD;     // Stop watchdog timer
-  P1DIR = 0xFF;
-  LCDSend4Bits(0xFF);
-  */
-
   // Timer watchdog, sert à compter le temps
   WDTCTL = WDTPW + WDTCNTCL + WDTTMSEL + WDTSSEL + WDTIS1;
   BCSCTL3 |= LFXT1S0 | XCAP_3;
@@ -792,11 +784,9 @@ void main (void)
   DCF_REN |= DCF_DAT;
   DCF_OUT |= DCF_DAT;
   // dcf power on il faut mettre le pin à 0 pour l'activer
-  DCF_POW_ON;
-    
+  DCF_POW_ON;  
   DCF_IE |= DCF_DAT;    // interruption activée
   DCF_IES |= DCF_DAT;   // high to low transition
-  
   
   LCD_DIR |= (LCD_CLK | LCD_DAT | E);
   
@@ -857,14 +847,11 @@ void main (void)
   HPOff;
   iMusique = 0;
   musiqueCnt = 0;
-  volMax = 100;
-  musique = &pink_martini[0];
-
-
-
+  volMax = 2;
+  numSonnerie = 3;
 
   // retro-éclairage
-  blMin = 59;
+  blMin = 25;
   blMax = FADE_COUNT-1;
   setBL(blMin);
   blTimer = 0;
@@ -874,14 +861,18 @@ void main (void)
   date.mois = 01;
   date.annee = 2012;
   date.jourSem = 1;
-  avanceO2 = 3;
+  avanceO2 = 0;
   
   deltaX=0;
   
-  date.heure.heures = 23;
+  date.heure.heures = 3;
   date.heure.minutes = 59;
   date.heure.secondes = 58;                                                           
-  delaiSoleil = 3;
+  delaiSoleil = 25;
+  
+  alarme.heures = 4;
+  
+  config |= ALARM_ON;
   
   // definition des menus
   // Menu principal
@@ -918,13 +909,34 @@ void main (void)
   }
 }
 
-// Timer A0 interrupt service routine.
-/*
-interrupt (TIMERA0_VECTOR) Timer_A (void)
-{ 
-  
+void ajouteMinutes(int minutes)
+{
+  date.heure.minutes+=minutes;
+  if(date.heure.minutes>60)
+  {
+   date.heure.minutes=date.heure.minutes%60;
+   date.heure.heures++;
+   if(date.heure.heures==24)
+   {
+    date.heure.heures=0;
+    date.jour++;
+    if(date.jourSem<6)
+      date.jourSem++;
+    else
+      date.jourSem=0;
+    if(date.jour>jourDansMois[date.mois-1])        
+    {
+      date.jour=1;
+      date.mois++;
+      if(date.mois==13)
+      {
+        date.mois=1;
+        date.annee++;
+      }
+     }
+   }
+  }
 }
-*/
 
 // Port 2 interrupt service routine
 interrupt (PORT1_VECTOR) Port_1(void)
@@ -932,12 +944,17 @@ interrupt (PORT1_VECTOR) Port_1(void)
     if(P1IFG & DCF_DAT)
     {
       DCFBit++;       //prochain bit
+      //debug = DCFErreur;
       if(DCFCnt>100)
       {
-         //if(!DCFErreur && (DCFBit==59))
+         if((DCFBit==59) && !DCFErreur)
          {
           date = DCFDate;
+          ajouteMinutes(avanceO2);
+          date.jourSem = (date.jourSem+6)%7;
           aMAJ |= MAJ_HEURE3 | MAJ_DATE;
+          DCF_POW_OFF; // On est mis à jour, on éteint le DCF
+          config |= DCF_ON;
          }
          DCFBit = 0;
          DCFDate.heure.minutes = DCFDate.heure.heures = DCFDate.heure.secondes = DCFDate.jourSem = DCFDate.jour = DCFDate.mois = DCFErreur = DCFParite =0;  
@@ -945,8 +962,7 @@ interrupt (PORT1_VECTOR) Port_1(void)
       } 
       DCFCnt = 0;
       blinkDCF();
-      debug = DCFErreur;
-      aMAJ |= MAJ_DEBUG;
+      //aMAJ |= MAJ_DEBUG;
       P1IFG &= ~DCF_DAT;
       DCF_IE &= ~DCF_DAT;
     }
@@ -975,15 +991,15 @@ interrupt (PORT2_VECTOR) Port_2(void)
 {        
     if(P2IFG & (BTN_MENU | BTN_HAUT| BTN_BAS))
     {
-      //si pas de bl on ne prend pas en compte le bouton sauf pour arreter la musique
-      if(blTimer == 0)
+      if(config & JOUE_MUSIQUE)
       {
-        if(config & JOUE_MUSIQUE)
-        {
           stopMusique();
           config |= SNOOZE;
           timerSnooze = DELAI_SNOOZE;
-        }
+      }
+      //si pas de bl on ne prend pas en compte le bouton
+      if(blTimer == 0)
+      {
         P2IFG &=~(BTN_MENU | BTN_HAUT| BTN_BAS);
         blFadeStep = BL_FADE_STEP;
         blFadeValue = blMin;
@@ -1013,6 +1029,27 @@ interrupt (WDT_VECTOR) Watchdog(void)
 {
   WDTcnt++; // il faut compter 64 fois pour une seconde.
   DCFCnt++; // Il faut compter 9 fois (=156 ms) avant de vérifier DCF : si signal=low->1 sinon ->0 
+  
+  if(config & FLASH_LIGHT)
+  {
+    flashCnt++;
+    if(flashCnt == 192)
+    {
+      flashCnt=0;
+      config &= ~FLASH_LIGHT;
+      setBL(0);
+    }
+    if(flashCnt%8==4)
+    {
+      setBL(59);
+      setLamp(59);
+    }
+    if(flashCnt%8==0)
+    {
+      setBL(0);
+      setLamp(0);
+    }
+  }
   
   if(config & JOUE_MUSIQUE)
   {
@@ -1051,7 +1088,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
     switch(DCFBit)
     {
       case 20 : 
-        DCFErreur |= bit;
+        if(!bit) DCFErreur = 1;   // doit toujours etre à 1
         DCFParite = 0;
         break;
       case 21 :
@@ -1172,17 +1209,6 @@ interrupt (WDT_VECTOR) Watchdog(void)
     
   }
   
-  // gère l'anti-rebond des boutons
-  /*
-  if(interTimer)
-  {
-    if(--interTimer==0)
-    {
-      BTN_IFG=0;
-      BTN_IE |= BTN_MENU|BTN_HAUT|BTN_BAS;
-    }
-  }
-  */
   if(config & BL_FADE)
   {
     blFadeValue+=blFadeStep;
@@ -1245,6 +1271,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
        if(date.heure.heures==24)
        {
         date.heure.heures=0;
+        DCF_POW_ON;           //à minuit on met à jour l'heure
         date.jour++;
         if(date.jourSem<6)
           date.jourSem++;
@@ -1284,6 +1311,11 @@ interrupt (WDT_VECTOR) Watchdog(void)
         if((date.heure.heures == alarme2.heures) && (date.heure.minutes == alarme2.minutes))
         {
           sonneAlarme();
+        }
+      // 3h18 ?
+      if((date.heure.heures == 3) && (date.heure.minutes == 18))
+        {
+          config |= FLASH_LIGHT; 
         }
     }
   }
