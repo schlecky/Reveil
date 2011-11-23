@@ -236,6 +236,7 @@ enum Maj {
   MAJ_ALARME = 16,
   MAJ_SOLEIL = 32,
   MAJ_DEBUG = 64,
+  MAJ_SECONDES = 128,
   
   MAJ_FLECHE = 2,       // Menu
   MAJ_MENU   = 4,

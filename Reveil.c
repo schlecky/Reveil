@@ -82,11 +82,7 @@ void LCDWriteHeure3()
   LCDSendBigNum3(date.heure.heures%10,5);
   LCDSendBigNum3(date.heure.minutes/10,10);
   LCDSendBigNum3(date.heure.minutes%10,15);
- /*
-  LCDSendBigNum3(debutAlarme.heures/10,0);
-  LCDSendBigNum3(debutAlarme.heures%10,5);
-  LCDSendBigNum3(debutAlarme.minutes/10,10);
-  LCDSendBigNum3(debutAlarme.minutes%10,15);*/
+
   //double points
   LCDGotoXY(9,1);
   LCDSend(3,SEND_CHR);
@@ -189,6 +185,13 @@ void affichageHeure()
     LCDInit();     
   if(aMAJ & MAJ_CLEAR)
     LCDClear();     
+  
+  if(aMAJ & MAJ_SECONDES)
+  {
+    LCDGotoXY(16,3);
+    LCDWriteInt2(date.heure.secondes);
+    aMAJ &= ~ MAJ_DEBUG;
+  }
   
   if(aMAJ & MAJ_DEBUG)
   {
@@ -474,7 +477,7 @@ void reglageInt(int* num, int min, int max,int step,enum Maj type)
       }
     }
     btnAppuye = AUCUN;
-    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX)& (ecran==ECRAN_MENU_ECLAIRAGE))
+    if(type & (MAJ_ECR_MIN | MAJ_ECR_MAX) && (ecran == ECRAN_MENU_ECLAIRAGE))
       setBL(blFadeValue);
     aMAJ |= MAJ_CURS;
     cursOn=0;
@@ -847,32 +850,30 @@ void main (void)
   HPOff;
   iMusique = 0;
   musiqueCnt = 0;
-  volMax = 2;
-  numSonnerie = 3;
+  volMax = 70;
+  numSonnerie = 1;
 
   // retro-éclairage
-  blMin = 25;
+  blMin = 0;
   blMax = FADE_COUNT-1;
   setBL(blMin);
   blTimer = 0;
   
   // parametres par défaut
-  date.jour = 01;
-  date.mois = 01;
+  date.jour = 31;
+  date.mois = 12;
   date.annee = 2012;
   date.jourSem = 1;
   avanceO2 = 0;
   
   deltaX=0;
   
-  date.heure.heures = 3;
-  date.heure.minutes = 59;
-  date.heure.secondes = 58;                                                           
+  date.heure.heures = 10;
+  date.heure.minutes = 30;
+  date.heure.secondes = 0;                                                           
   delaiSoleil = 25;
   
-  alarme.heures = 4;
-  
-  config |= ALARM_ON;
+  // config |= ALARM_ON;
   
   // definition des menus
   // Menu principal
@@ -945,6 +946,11 @@ interrupt (PORT1_VECTOR) Port_1(void)
     {
       DCFBit++;       //prochain bit
       //debug = DCFErreur;
+      if(DCFCnt<50)
+      {
+        DCFErreur = 1;
+      }
+      
       if(DCFCnt>100)
       {
          if((DCFBit==59) && !DCFErreur)
@@ -1037,7 +1043,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
     {
       flashCnt=0;
       config &= ~FLASH_LIGHT;
-      setBL(0);
+      setBL(blMin);
     }
     if(flashCnt%8==4)
     {
@@ -1229,6 +1235,8 @@ interrupt (WDT_VECTOR) Watchdog(void)
   {
     WDTcnt=0;
     date.heure.secondes++;
+    if(ecran == ECRAN_HEURE)
+          aMAJ |= MAJ_SECONDES;
     if(config & LEVER_SOLEIL)
     {
       soleilTimer++;
@@ -1242,7 +1250,7 @@ interrupt (WDT_VECTOR) Watchdog(void)
           config &= ~LEVER_SOLEIL; 
         }
         setLamp(soleilValue);
-
+        setBL(soleilValue);
       }
     }
     
